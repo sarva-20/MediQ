@@ -42,6 +42,7 @@ class Visit(SQLModel, table=True):
     priority_flag: bool = False
     priority_reason: str | None = None
     priority_set_by_user_id: int | None = Field(default=None, foreign_key="users.id")
+    priority_set_at: datetime | None = None
 
     estimated_start: datetime | None = None
     estimated_wait_min: int | None = None

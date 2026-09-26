@@ -61,7 +61,7 @@ flowchart TB
 
 ## 3. Data Flow — Event-Driven Design
 
-Every state-changing action in MediQ is modeled as one of a fixed set of **events**: `book`, `walk_in`, `check_in`, `start`, `delay`, `complete`, `cancel`, `no_show`.
+Every state-changing action in MediQ is modeled as one of a fixed set of **events**: `book`, `walk_in`, `check_in`, `start`, `delay`, `complete`, `cancel`, `no_show`, `priority_set`. A recompute additionally logs `eta_changed` for any visit whose estimate actually moved — see § 8.
 
 The rule is always the same, regardless of which event fired:
 
@@ -74,15 +74,7 @@ Because `recompute` always takes `(provider, now)` and reads only persisted stat
 
 ### Wait-time estimation approach
 
-For a given provider at time `now`, estimated wait for a queue entry is:
-
-```
-estimated_wait = sum(expected_service_duration(entry) for entry ahead in queue)
-                 + max(0, provider.current_case_expected_end - now)
-                 − load_balancing_adjustment (if the department has multiple interchangeable providers)
-```
-
-`expected_service_duration` comes from configurable per-department/per-service assumptions (e.g. a CT scan takes longer than a General Medicine consult, and includes prep time for scanners). Overbooked slots simply add more entries "ahead in queue" rather than being modeled specially. A `delay` event updates `provider.current_case_expected_end` directly, which is what causes downstream estimates to increase on the next recompute.
+Each provider gets one timeline, built fresh on every recompute from whoever's currently in service plus everyone still waiting. The full placement algorithm, its reason codes, and the auto-no-show rule are in § 8 below.
 
 ### Simulated clock
 
@@ -254,3 +246,51 @@ It is deliberately tolerant of the current state of the backend, most of which i
 As placeholder endpoints are replaced module by module, the console needs no changes — it starts rendering real data the moment an endpoint stops returning `501`.
 
 Two small additions to the API surface were made specifically to support this console (both still `501` placeholders, landing for real in Module M8): `POST /api/sim/freeze` and `POST /api/sim/resume`, wrapping the already-implemented `app.core.clock.freeze`/`unfreeze` (see `docs/api-contract.md` § Simulation).
+
+## 8. Queue Engine (Module M6)
+
+`app/engine/` is a pure, framework-free module: plain dataclasses in (`EngineInput`), plain dataclasses out (`EngineResult`) — no database session, no wall clock. `app/services/queue_service.py` is the only caller: it loads a provider's current state from the database, calls `app.engine.run()`, and persists the result. `app/services/lifecycle_service.py` validates and applies each state transition, then calls `queue_service.recompute_provider()` so the effect is immediate.
+
+### Duration estimation
+
+```
+expected_duration = (learned EWMA if sample_count >= 3, else service.default_duration_min) + service.prep_time_min
+```
+
+The learned average (`ServiceDurationStat.ewma_minutes`, keyed by `(provider_id, service_id)`) is updated on `complete`: `ewma_minutes = alpha * actual_minutes + (1 - alpha) * ewma_minutes` (seeded directly from the first sample instead of blending against 0). `actual_minutes` is `completed_at - started_at` minus `prep_time_min`, so the learned figure stays comparable to `default_duration_min` — prep time is added back on top by the formula above either way. Radiology services use this identical formula; only the numbers configured on the `Service` row differ (e.g. CT: 30 min default + 15 min prep = 45 min).
+
+### The provider timeline
+
+One cursor, one pass, in this order:
+
+1. **In-service visit sets the cursor.** `expected_end = started_at + expected_duration + delay_minutes`. If `now` is already past that, the provider is overrunning: assume it finishes in `max(2, 25% of expected_duration)` more minutes rather than trusting an estimate reality has already disproved.
+2. **Auto-no-show.** Any `BOOKED` visit whose `scheduled_start + noshow_grace_minutes` (default 10, `ClinicSettings.noshow_grace_minutes`) has passed is excluded from the timeline and reported back to `queue_service`, which marks it `NO_SHOW` with a `QueueEvent`. A `CHECKED_IN` visit never auto-expires — it already arrived.
+3. **Priority visits go first**, in the order they were flagged (`priority_set_at`), each placed right at the cursor. Priority is exclusively a staff action (`POST /visits/{id}/priority`, non-empty reason required) or the demo simulator — never inferred from symptoms.
+4. **Appointments anchor to their own time**: `start = max(cursor, scheduled_start + delay_minutes)`, processed in `scheduled_start` order. Two appointments anchored to the same slot (overbooking) simply queue one after the other.
+5. **Walk-ins fill gaps.** In arrival order, each walk-in takes the earliest gap between two already-placed blocks that it fits inside without spilling into the next block (which would push that appointment later than it would otherwise start) — otherwise it goes after the last block. A `delay` on a waiting visit (appointment or walk-in) defers its own earliest-eligible time the same way.
+6. Every placement gets `estimated_start`, `estimated_end`, `estimated_wait_min = max(0, estimated_start - now)`, `expected_delay_min = max(0, estimated_start - scheduled_start)` (`0` for walk-ins, which have no schedule to be measured against), a position, and a reason (below).
+
+### ETA reason codes
+
+Generated by comparing the new `estimated_start` against the visit's previous one (`Visit.estimated_start` before this recompute). Checked in this order; the first match wins — with several true simultaneously, the most informative one is reported rather than every contributing factor:
+
+| Condition | Reason text |
+|---|---|
+| This visit is the one just placed by priority | `Priority patient placed ahead (set by staff)` |
+| Pulled earlier, and a walk-in filled a newly-opened gap | `Filled a gap left by an earlier no-show` |
+| Pulled earlier, and a no-show is known to have freed the slot | `no-show at HH:MM freed the slot` |
+| Pulled earlier, no no-show this round | `an earlier slot became available` |
+| The in-service visit has `delay_minutes > 0` | `delay logged by provider` |
+| The in-service visit is organically overrunning (no explicit delay) | `consultation ahead overran` |
+| This visit itself has `delay_minutes > 0` | `delay logged (<reason>)` |
+| A priority visit exists ahead of it | `priority patient placed ahead of you` |
+| First-ever estimate, or unchanged | `Next in line` / `N ahead in queue` |
+| None of the above | `provider running behind` |
+
+A non-zero, non-first-time change is prefixed with the signed delta, e.g. `+15 min: delay logged by provider` or `-10 min: no-show at 10:20 freed the slot` — matching the example vocabulary this module was specified against.
+
+### Delayed, load, and privacy
+
+A visit counts as **delayed** in queue summaries (`delayed_count`) if `delay_minutes > 0` or its `expected_delay_min > 10` — a fixed display threshold, independent of `noshow_grace_minutes` even though both happen to default to 10. **Load** is simply the number of active visits for a provider (in-service, if any, plus everyone waiting).
+
+**Privacy:** `GET /api/queue/providers/{id}` shows `patient_name` as first name + last initial only (e.g. "Ravi K.") — this is a shared queue-board display, not a private record, even though the endpoint itself is staff-only. `GET /api/status/{token_no}` (public, no login) goes further and omits the name entirely, along with anything else not already summarized in § "Queue and status" of `docs/api-contract.md`.

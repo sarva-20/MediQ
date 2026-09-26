@@ -1,3 +1,3 @@
 # Engine
 
-The single deterministic queue engine shared by all departments: wait-time estimation, slot/overbooking limits, counter load-balancing, and the `recompute(provider, now)` step run after every lifecycle event (book, walk-in, check-in, start, delay, complete, cancel, no-show). Pure logic, no database or HTTP concerns.
+The single deterministic queue engine shared by all departments: `schedule.run(EngineInput) -> EngineResult` places every waiting visit on one provider's timeline (priority, then anchored appointments, then walk-ins filling gaps), estimates its wait, and writes a plain-English reason for its ETA. Plain dataclasses in (`models.py`), plain dataclasses out — no database session, no wall clock, no FastAPI/SQLModel import. `app.services.queue_service` is the only caller; it loads state from the DB, calls `run()`, and persists the result. See `docs/architecture.md` § Queue engine for the rule table.

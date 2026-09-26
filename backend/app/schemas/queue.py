@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.models.enums import VisitSource, VisitStatus
 
@@ -10,12 +10,13 @@ class QueueVisitOut(BaseModel):
 
     visit_id: int
     token_no: str
-    patient_name: str
+    patient_name: str = Field(description="First name + last initial only, e.g. 'Ravi K.'")
     status: VisitStatus
     source: VisitSource
     position: int
     estimated_start: datetime | None
     estimated_wait_min: int | None
+    expected_delay_min: int
     eta_reason: str | None
     priority_flag: bool
 
@@ -56,8 +57,11 @@ class PublicStatusOut(BaseModel):
     token_no: str
     department_code: str
     provider_name: str
+    room_label: str
     status: VisitStatus
     position: int | None
+    patients_ahead: int | None
+    now_serving_token: str | None
     estimated_start: datetime | None
     estimated_wait_min: int | None
     eta_reason: str | None

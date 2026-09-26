@@ -1,13 +1,13 @@
 # API Contract
 
 This is the contract to build the frontend against. Every endpoint below exists and
-appears in `/docs` (Swagger UI) with its real request/response schemas. As of
-Module M2, `POST /api/auth/login` and `GET /api/auth/me` are fully implemented and
-every other endpoint enforces its documented role (and, where noted, object-level
-ownership) — but the underlying business logic is still a `501 Not Implemented`
-placeholder, so a request that clears the auth/role check will still get a 501, not
-real data. Implementation lands module by module (see
-`docs/requirements-traceability.md` for current status). The machine-readable
+appears in `/docs` (Swagger UI) with its real request/response schemas, and every
+endpoint enforces its documented role (and, where noted, object-level ownership).
+As of Module M6, **Auth, Lifecycle, Queue and status, Metrics and audit, and
+Simulation are fully implemented** — real data, real state transitions, real 409s.
+**Booking/walk-in creation, Catalog, and Admin are still `501 Not Implemented`**
+placeholders (a request that clears the auth/role check still gets a 501 there) —
+see `docs/requirements-traceability.md` for current status. The machine-readable
 version is `docs/openapi.json`, exported from the running app.
 
 Base URL: `http://localhost:8000/api` (local dev). All request/response bodies are
@@ -70,6 +70,7 @@ Stable machine-readable `code` values in use:
 | `token_expired` | 401 | Token's `exp` has passed — re-login. |
 | `forbidden` | 403 | Authenticated, but the role (or object ownership) doesn't permit this action. |
 | `not_found` | 404 | Path references a resource that doesn't exist (e.g. an unknown `visit_id`). |
+| `conflict` | 409 | The visit's current status doesn't allow this transition (e.g. completing a visit that's already `completed`, or starting a second visit while the provider already has one `in_service`). |
 | `validation_error` | 422 | Request body/query failed schema validation; `details.errors` has the field-level breakdown. |
 | `not_implemented` | 501 | Passed every auth/role/ownership check; the business logic itself isn't built yet. |
 | `http_error` | varies | Fallback for any other `HTTPException` not using a specific code above. |
@@ -90,7 +91,9 @@ List endpoints that can grow large accept `page` (default `1`) and `page_size`
 
 ### Queue snapshot shape
 
-The shape returned by the per-provider queue endpoint and pushed over SSE:
+The shape returned by the per-provider queue endpoint and pushed over SSE. See
+`docs/architecture.md` § 8 for exactly how `estimated_start`/`eta_reason` are
+computed and the full reason-code table.
 
 ```json
 {
@@ -105,13 +108,14 @@ The shape returned by the per-provider queue endpoint and pushed over SSE:
     {
       "visit_id": 42,
       "token_no": "GM-A013",
-      "patient_name": "Ravi Kumar",
+      "patient_name": "Ravi K.",
       "status": "checked_in",
       "source": "appointment",
       "position": 1,
       "estimated_start": "2026-09-26T05:10:00Z",
       "estimated_wait_min": 12,
-      "eta_reason": "2 ahead in queue (24 min) + provider running 5 min behind",
+      "expected_delay_min": 8,
+      "eta_reason": "+8 min: consultation ahead overran",
       "priority_flag": false
     }
   ]
@@ -120,6 +124,10 @@ The shape returned by the per-provider queue endpoint and pushed over SSE:
 
 `current_token` is the token currently in service (or being called), `next_tokens`
 are the next few up (small, fixed-size preview — the full order is `queue`).
+`patient_name` is first name + last initial only, even on this staff-only
+endpoint — it's a shared queue-board display. `delayed_count` counts a visit as
+delayed if `delay_minutes > 0` or `expected_delay_min > 10`; `load` is the number
+of active visits (in-service + waiting) for that provider.
 
 ---
 
@@ -131,6 +139,8 @@ are the next few up (small, fixed-size preview — the full order is `queue`).
 | GET | `/api/auth/me` | Any authenticated | → `UserOut` |
 
 ## Catalog
+
+All Catalog endpoints are **501 — Module M3.**
 
 | Method | Path | Role | Notes |
 |---|---|---|---|
@@ -150,10 +160,10 @@ Example `SlotOut`:
 
 | Method | Path | Role | Notes |
 |---|---|---|---|
-| POST | `/api/appointments` | Patient, Receptionist | Body: `AppointmentCreate` → `VisitOut` (201). Admin is deliberately excluded — booking is a patient/front-desk action. |
-| GET | `/api/appointments` | Patient (own), Receptionist, Admin | Paginated `VisitOut` |
-| POST | `/api/appointments/{visit_id}/cancel` | Patient (own), Receptionist | → `VisitOut` |
-| POST | `/api/visits/{visit_id}/check-in` | Receptionist | → `VisitOut` |
+| POST | `/api/appointments` | Patient, Receptionist | **501 — Module M3.** Body: `AppointmentCreate` → `VisitOut` (201). Admin is deliberately excluded — booking is a patient/front-desk action. |
+| GET | `/api/appointments` | Patient (own), Receptionist, Admin | **501 — Module M3.** Paginated `VisitOut` |
+| POST | `/api/appointments/{visit_id}/cancel` | Patient (own), Receptionist, Admin | **Implemented.** `BOOKED`/`CHECKED_IN` → `CANCELLED`; releases the slot's `booked_count` if the slot is in the future. `409 conflict` from any other status. → `VisitOut` |
+| POST | `/api/visits/{visit_id}/check-in` | Receptionist, Admin | **Implemented.** `BOOKED` → `CHECKED_IN` only; `409 conflict` otherwise. → `VisitOut` |
 
 Example `AppointmentCreate`:
 
@@ -169,8 +179,8 @@ Example `VisitOut`:
   "source": "appointment", "token_no": "GM-A013", "status": "booked",
   "scheduled_start": "2026-09-26T09:00:00Z", "checked_in_at": null,
   "started_at": null, "completed_at": null, "delay_minutes": 0, "delay_reason": null,
-  "priority_flag": false, "priority_reason": null,
-  "estimated_start": "2026-09-26T09:12:00Z", "estimated_wait_min": 12, "eta_reason": null,
+  "priority_flag": false, "priority_reason": null, "priority_set_at": null,
+  "estimated_start": "2026-09-26T09:12:00Z", "estimated_wait_min": 12, "eta_reason": "Next in line",
   "created_at": "2026-09-26T05:00:00Z"
 }
 ```
@@ -179,7 +189,7 @@ Example `VisitOut`:
 
 | Method | Path | Role | Notes |
 |---|---|---|---|
-| POST | `/api/walk-ins` | Receptionist | Body: `WalkInCreate` → `VisitOut` (201) |
+| POST | `/api/walk-ins` | Receptionist | **501 — Module M4.** Body: `WalkInCreate` → `VisitOut` (201) |
 
 Example `WalkInCreate` (auto-routed — no `provider_id`):
 
@@ -191,37 +201,76 @@ Example `WalkInCreate` (auto-routed — no `provider_id`):
 
 | Method | Path | Role | Notes |
 |---|---|---|---|
+All three are **implemented** (Module M6) — real placements from `app.engine`, recomputed fresh on every read.
+
+| Method | Path | Role | Notes |
+|---|---|---|---|
 | GET | `/api/queue/providers/{provider_id}` | Receptionist, Provider (own), Admin | → `QueueSnapshotOut` (see above) |
 | GET | `/api/queue/overview` | Receptionist, Admin | → `{"providers": ProviderQueueSummaryOut[]}` — one summary row per active provider |
-| GET | `/api/status/{token_no}` | Public, no login | → `PublicStatusOut` — never includes patient name/phone |
+| GET | `/api/status/{token_no}` | Public, no login | → `PublicStatusOut` — never includes patient name/phone; `404 not_found` for an unknown token |
 
-Example `PublicStatusOut`:
+Example `PublicStatusOut` (waiting):
 
 ```json
 {
   "token_no": "GM-A013", "department_code": "GM", "provider_name": "Dr. Ananya Iyer",
-  "status": "checked_in", "position": 1,
+  "room_label": "GM-1", "status": "checked_in", "position": 1, "patients_ahead": 0,
+  "now_serving_token": "GM-A012",
   "estimated_start": "2026-09-26T09:10:00Z", "estimated_wait_min": 12,
-  "eta_reason": "2 ahead in queue (24 min)"
+  "eta_reason": "Next in line"
 }
 ```
 
+For a visit that's `in_service`, `position`/`patients_ahead` are `null` and `eta_reason` is `"Now being served"`. For a terminal status (`completed`/`cancelled`/`no_show`), `estimated_start`/`estimated_wait_min` are `null` and `eta_reason` reads e.g. `"Visit completed."`.
+
 ## Lifecycle (staff / provider)
 
-| Method | Path | Role | Notes |
-|---|---|---|---|
-| POST | `/api/visits/{visit_id}/start` | Provider (own) | → `VisitOut` |
-| POST | `/api/visits/{visit_id}/delay` | Provider (own), Receptionist | Body: `{"minutes": 15, "reason": "..."}` → `VisitOut` |
-| POST | `/api/visits/{visit_id}/complete` | Provider (own) | → `VisitOut` |
-| POST | `/api/visits/{visit_id}/no-show` | Receptionist, Provider (own) | → `VisitOut` |
-| POST | `/api/visits/{visit_id}/priority` | Receptionist, Admin only | Body: `{"flag": true, "reason": "..."}` → `VisitOut`. No symptom/clinical field exists in this body or anywhere in the API — priority is an explicit operational decision. |
+All **implemented** (Module M6). Every action validates the current status,
+returns `409 conflict` for an illegal transition, writes an audit `QueueEvent`,
+and immediately recomputes that provider's queue (see `docs/architecture.md` § 8).
+
+| Method | Path | Role | Valid from | Notes |
+|---|---|---|---|---|
+| POST | `/api/visits/{visit_id}/start` | Provider (own), Admin | `checked_in`, `booked` (auto check-in) | `409` if this provider already has a visit `in_service`. → `VisitOut` |
+| POST | `/api/visits/{visit_id}/delay` | Provider (own), Receptionist, Admin | `in_service`, `checked_in`, `booked` | Body: `{"minutes": 15, "reason": "..."}`. Accumulates into `delay_minutes`; on an `in_service` visit it extends its remaining time, on a waiting visit it defers its own earliest start. → `VisitOut` |
+| POST | `/api/visits/{visit_id}/complete` | Provider (own), Admin | `in_service` | Sets `completed_at`; updates `ServiceDurationStat` via EWMA. → `VisitOut` |
+| POST | `/api/visits/{visit_id}/no-show` | Receptionist, Provider (own), Admin | `booked`, `checked_in` | Manual no-show — see also the automatic one in § Simulation. → `VisitOut` |
+| POST | `/api/visits/{visit_id}/priority` | Receptionist, Admin only | `booked`, `checked_in` | Body: `{"flag": true, "reason": "..."}` — `reason` is required (min length 1; `422` if blank). No symptom/clinical field exists in this body or anywhere in the API — priority is an explicit operational decision. → `VisitOut` |
+
+Admin is included on every lifecycle action above (as an operational override — same reasoning as its unrestricted access to every provider's queue/appointments) **except** `POST /api/appointments` and `POST /api/walk-ins`, where it's deliberately excluded because booking is specifically a patient/front-desk action, not an admin one.
+
+Example request/response for `POST /api/visits/{visit_id}/delay`:
+
+```json
+// Request
+{ "minutes": 15, "reason": "Running behind schedule" }
+```
+```json
+// 200 response (VisitOut)
+{
+  "id": 42, "patient_id": 12, "provider_id": 5, "service_id": 1, "slot_id": null,
+  "source": "appointment", "token_no": "GM-A013", "status": "in_service",
+  "scheduled_start": "2026-09-26T09:00:00Z", "checked_in_at": "2026-09-26T09:00:00Z",
+  "started_at": "2026-09-26T09:02:00Z", "completed_at": null,
+  "delay_minutes": 15, "delay_reason": "Running behind schedule",
+  "priority_flag": false, "priority_reason": null, "priority_set_at": null,
+  "estimated_start": "2026-09-26T09:00:00Z", "estimated_wait_min": 0, "eta_reason": "Next in line",
+  "created_at": "2026-09-26T08:00:00Z"
+}
+```
+```json
+// 409 response — visit already completed
+{ "error": { "code": "conflict", "message": "Cannot delay a visit with status 'completed'.", "details": null } }
+```
 
 ## Metrics and audit
 
+Both **implemented** (Module M6).
+
 | Method | Path | Role | Notes |
 |---|---|---|---|
-| GET | `/api/metrics` | Receptionist, Provider, Admin | → `MetricsOut` |
-| GET | `/api/events` | Admin | Paginated `QueueEventOut` — append-only audit log |
+| GET | `/api/metrics` | Receptionist, Provider, Admin | Clinic-wide, across every active provider. → `MetricsOut` |
+| GET | `/api/events` | Admin | Newest first. Query params: `page`, `page_size` (also doubles as the "limit"), `provider_id`, `visit_id` — all optional. Paginated `QueueEventOut` — append-only audit log; event `type` is one of `book`, `walk_in`, `check_in`, `start`, `delay`, `complete`, `cancel`, `no_show`, `priority_set`, `eta_changed`. |
 
 Example `MetricsOut`:
 
@@ -243,14 +292,16 @@ Example `MetricsOut`:
 
 ## Simulation (dev/demo only)
 
+All **implemented** (Module M6).
+
 | Method | Path | Role | Notes |
 |---|---|---|---|
 | GET | `/api/sim/clock` | Admin | → `SimClockOut`: `{"effective_time", "offset_minutes", "is_frozen"}` |
-| POST | `/api/sim/advance` | Admin | Body: `{"minutes": 20}` → `SimClockOut` |
+| POST | `/api/sim/advance` | Admin | Body: `{"minutes": 20}`. Recomputes every active provider afterward, so any `BOOKED` visit that's now past `scheduled_start + noshow_grace_minutes` is auto-marked `NO_SHOW` and every estimate updates. → `SimClockOut` |
 | POST | `/api/sim/freeze` | Admin | Stops wall time from advancing the clock further (wraps `core.clock.freeze`) → `SimClockOut` |
 | POST | `/api/sim/resume` | Admin | Resumes wall time (wraps `core.clock.unfreeze`) → `SimClockOut` |
-| POST | `/api/sim/reset` | Admin | → `SimClockOut` |
-| POST | `/api/sim/seed` | Admin | Re-runs the seed script (202 Accepted, async) |
+| POST | `/api/sim/reset` | Admin | Recomputes every active provider afterward. → `SimClockOut` |
+| POST | `/api/sim/seed` | Admin | Re-runs the seed script with `reset=True` (202 Accepted) |
 
 ## Admin
 

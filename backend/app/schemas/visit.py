@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from app.models.enums import VisitSource, VisitStatus
 
@@ -9,6 +9,8 @@ class VisitOut(BaseModel):
     """Shared representation of a visit, returned by booking, walk-in, and lifecycle
     endpoints. Never includes patient contact details beyond what the caller's role
     is entitled to — the public status endpoint uses PublicStatusOut instead."""
+
+    model_config = ConfigDict(from_attributes=True)
 
     id: int
     patient_id: int
@@ -26,6 +28,7 @@ class VisitOut(BaseModel):
     delay_reason: str | None
     priority_flag: bool
     priority_reason: str | None
+    priority_set_at: datetime | None
     estimated_start: datetime | None
     estimated_wait_min: int | None
     eta_reason: str | None

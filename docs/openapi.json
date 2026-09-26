@@ -427,6 +427,9 @@
               }
             }
           },
+          "409": {
+            "description": "Visit has already started, completed, or no-showed."
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -473,6 +476,9 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Visit isn't in BOOKED status."
           },
           "422": {
             "description": "Validation Error",
@@ -683,6 +689,9 @@
               }
             }
           },
+          "409": {
+            "description": "Not checked-in/booked, or provider already has someone in service."
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -740,6 +749,9 @@
               }
             }
           },
+          "409": {
+            "description": "Visit has already completed, been cancelled, or no-showed."
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -787,6 +799,9 @@
               }
             }
           },
+          "409": {
+            "description": "Visit isn't currently in service."
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -833,6 +848,9 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Visit isn't booked or checked-in."
           },
           "422": {
             "description": "Validation Error",
@@ -891,6 +909,9 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Visit has already started, completed, been cancelled, or no-showed."
           },
           "422": {
             "description": "Validation Error",
@@ -962,6 +983,38 @@
               "type": "integer",
               "default": 20,
               "title": "Page Size"
+            }
+          },
+          {
+            "name": "provider_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Provider Id"
+            }
+          },
+          {
+            "name": "visit_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Visit Id"
             }
           }
         ],
@@ -1087,7 +1140,6 @@
           "simulation"
         ],
         "summary": "Freeze Sim Clock",
-        "description": "Wraps app.core.clock.freeze \u2014 added for the console's Freeze/Resume\ncontrols; the underlying clock logic is already implemented and unit-tested\n(see backend/tests/test_clock.py), only the HTTP surface is still M8.",
         "operationId": "freeze_sim_clock_api_sim_freeze_post",
         "responses": {
           "200": {
@@ -1829,6 +1881,7 @@
           },
           "reason": {
             "type": "string",
+            "minLength": 1,
             "title": "Reason"
           }
         },
@@ -2155,6 +2208,10 @@
             "type": "string",
             "title": "Provider Name"
           },
+          "room_label": {
+            "type": "string",
+            "title": "Room Label"
+          },
           "status": {
             "$ref": "#/components/schemas/VisitStatus"
           },
@@ -2168,6 +2225,28 @@
               }
             ],
             "title": "Position"
+          },
+          "patients_ahead": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Patients Ahead"
+          },
+          "now_serving_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Now Serving Token"
           },
           "estimated_start": {
             "anyOf": [
@@ -2209,8 +2288,11 @@
           "token_no",
           "department_code",
           "provider_name",
+          "room_label",
           "status",
           "position",
+          "patients_ahead",
+          "now_serving_token",
           "estimated_start",
           "estimated_wait_min",
           "eta_reason"
@@ -2294,7 +2376,7 @@
           "cancel",
           "no_show",
           "priority_set",
-          "recompute"
+          "eta_changed"
         ],
         "title": "QueueEventType",
         "description": "Fixed event vocabulary \u2014 every one of these, and only these, may mutate a Visit\nand must be followed by engine.recompute(provider, now). See docs/architecture.md."
@@ -2389,7 +2471,8 @@
           },
           "patient_name": {
             "type": "string",
-            "title": "Patient Name"
+            "title": "Patient Name",
+            "description": "First name + last initial only, e.g. 'Ravi K.'"
           },
           "status": {
             "$ref": "#/components/schemas/VisitStatus"
@@ -2424,6 +2507,10 @@
             ],
             "title": "Estimated Wait Min"
           },
+          "expected_delay_min": {
+            "type": "integer",
+            "title": "Expected Delay Min"
+          },
           "eta_reason": {
             "anyOf": [
               {
@@ -2450,6 +2537,7 @@
           "position",
           "estimated_start",
           "estimated_wait_min",
+          "expected_delay_min",
           "eta_reason",
           "priority_flag"
         ],
@@ -2829,6 +2917,18 @@
             ],
             "title": "Priority Reason"
           },
+          "priority_set_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priority Set At"
+          },
           "estimated_start": {
             "anyOf": [
               {
@@ -2887,6 +2987,7 @@
           "delay_reason",
           "priority_flag",
           "priority_reason",
+          "priority_set_at",
           "estimated_start",
           "estimated_wait_min",
           "eta_reason",

@@ -52,6 +52,13 @@ def not_found(message: str) -> HTTPException:
     )
 
 
+def conflict(message: str) -> HTTPException:
+    return HTTPException(
+        status_code=409,
+        detail={"error": {"code": "conflict", "message": message, "details": None}},
+    )
+
+
 def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     session: Session = Depends(get_session),

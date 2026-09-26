@@ -15,7 +15,7 @@ class ClinicSettings(SQLModel, table=True):
     __tablename__ = "clinic_settings"
 
     id: int = Field(default=SETTINGS_ROW_ID, primary_key=True)
-    noshow_grace_minutes: int = 15
+    noshow_grace_minutes: int = 10
     default_overbook_limit: int = 2
     ewma_alpha: float = 0.3
     walkin_routing_enabled: bool = True

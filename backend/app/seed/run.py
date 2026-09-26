@@ -35,6 +35,7 @@ from app.seed.data import (
     SERVICES,
 )
 from app.seed.tokens import TokenSequencer
+from app.services.queue_service import recompute_all
 
 PATIENT_COUNT = 40
 
@@ -286,6 +287,12 @@ def seed(session: Session, reset: bool = False) -> SeedSummary:
     patients = _seed_patients(session)
     user_count = _seed_users(session, providers, demo_patient=patients[0])
     visit_count = _seed_visits(session, providers, services, patients, now)
+
+    # Without this, every visit's estimated_start/eta_reason is None until
+    # whatever client happens to trigger the first recompute — and that
+    # client then sees a "first-ever estimate" baseline that's arbitrary
+    # (whatever `now` happened to be when they asked), not the seed's intent.
+    recompute_all(session)
 
     return SeedSummary(
         departments=len(departments),

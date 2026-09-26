@@ -45,4 +45,4 @@ class QueueEventType(StrEnum):
     CANCEL = "cancel"
     NO_SHOW = "no_show"
     PRIORITY_SET = "priority_set"
-    RECOMPUTE = "recompute"
+    ETA_CHANGED = "eta_changed"

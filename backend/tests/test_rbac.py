@@ -1,7 +1,9 @@
-"""RBAC coverage: per docs/api-contract.md, every business endpoint is still a
-Module M1 501 placeholder — so "may access" means the request clears the role
-(and, where applicable, object-level) guard and reaches that placeholder (501),
-while "may not access" means it's rejected before ever reaching it (403)."""
+"""RBAC coverage per docs/api-contract.md. Booking/walk-in creation and the
+catalog/admin routers are still Module M3/M4/M9 501 placeholders — "may access"
+there just means the request cleared the role/object-level guard and reached
+the placeholder. Lifecycle, queue, and events are real (Module M6) — "may
+access" there means a genuine 2xx. "May not access" always means rejected
+(403) before the handler body ever runs, regardless of which case applies."""
 
 from fastapi.testclient import TestClient
 
@@ -57,7 +59,7 @@ def test_provider_may_view_own_queue(client: TestClient, auth_fixture: AuthFixtu
         f"/api/queue/providers/{auth_fixture.provider.id}",
         headers=auth_header(auth_fixture.provider_user.id),
     )
-    assert response.status_code == 501
+    assert response.status_code == 200
 
 
 def test_provider_may_not_create_provider_via_admin_endpoint(
@@ -71,7 +73,7 @@ def test_provider_may_not_create_provider_via_admin_endpoint(
 
 def test_admin_may_list_events(client: TestClient, auth_fixture: AuthFixture) -> None:
     response = client.get("/api/events", headers=auth_header(auth_fixture.admin.id))
-    assert response.status_code == 501
+    assert response.status_code == 200
 
 
 def test_admin_may_not_create_appointment(client: TestClient, auth_fixture: AuthFixture) -> None:
@@ -97,7 +99,7 @@ def test_provider_object_level_isolation_on_own_queue(
         headers=auth_header(auth_fixture.provider_user.id),
     )
 
-    assert own_queue.status_code == 501
+    assert own_queue.status_code == 200
     assert others_queue.status_code == 403
     assert others_queue.json()["error"]["code"] == "forbidden"
 
@@ -114,7 +116,7 @@ def test_provider_object_level_isolation_on_lifecycle_actions(
         headers=auth_header(auth_fixture.other_provider_user.id),
     )
 
-    assert own_visit.status_code == 501
+    assert own_visit.status_code == 200
     assert others_visit.status_code == 403
 
 
@@ -130,7 +132,7 @@ def test_patient_object_level_isolation_on_cancel(
         headers=auth_header(auth_fixture.other_patient_user.id),
     )
 
-    assert own_cancel.status_code == 501
+    assert own_cancel.status_code == 200
     assert others_cancel.status_code == 403
 
 
@@ -141,3 +143,17 @@ def test_lifecycle_action_on_unknown_visit_is_404_not_403(
         "/api/visits/999999/start", headers=auth_header(auth_fixture.provider_user.id)
     )
     assert response.status_code == 404
+
+
+def test_admin_can_start_any_provider_visit_as_operational_override(
+    client: TestClient, auth_fixture: AuthFixture
+) -> None:
+    # Admin is exempt from ensure_visit_provider_scope (like receptionist), so
+    # it isn't tied to auth_fixture.provider specifically — this documents
+    # that admin has the same override on lifecycle actions it already has on
+    # queue reads and /admin, /sim.
+    response = client.post(
+        f"/api/visits/{auth_fixture.visit.id}/start", headers=auth_header(auth_fixture.admin.id)
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "in_service"

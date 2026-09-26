@@ -11,4 +11,4 @@ class PriorityRequest(BaseModel):
     API — priority is an explicit operational decision, never inferred."""
 
     flag: bool
-    reason: str
+    reason: str = Field(min_length=1)

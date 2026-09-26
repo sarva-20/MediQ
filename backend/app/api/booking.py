@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlmodel import Session
 
 from app.api.deps import (
+    conflict,
     ensure_visit_patient_scope,
     get_visit_or_404,
     not_implemented,
@@ -13,12 +14,15 @@ from app.models.user import User
 from app.schemas.booking import AppointmentCreate
 from app.schemas.common import Page
 from app.schemas.visit import VisitOut
+from app.services import lifecycle_service
+from app.services.lifecycle_service import InvalidTransitionError
 
 router = APIRouter(tags=["booking"])
 
 require_booker = require_roles(UserRole.PATIENT, UserRole.RECEPTIONIST)
 require_appointment_viewer = require_roles(UserRole.PATIENT, UserRole.RECEPTIONIST, UserRole.ADMIN)
-require_receptionist = require_roles(UserRole.RECEPTIONIST)
+require_canceller = require_roles(UserRole.PATIENT, UserRole.RECEPTIONIST, UserRole.ADMIN)
+require_checkin = require_roles(UserRole.RECEPTIONIST, UserRole.ADMIN)
 
 
 @router.post("/appointments", response_model=VisitOut, status_code=201)
@@ -40,20 +44,38 @@ def list_appointments(
     raise not_implemented("Module M3 - Slots and booking")
 
 
-@router.post("/appointments/{visit_id}/cancel", response_model=VisitOut)
+@router.post(
+    "/appointments/{visit_id}/cancel",
+    response_model=VisitOut,
+    responses={409: {"description": "Visit has already started, completed, or no-showed."}},
+)
 def cancel_appointment(
     visit_id: int,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_booker),
+    current_user: User = Depends(require_canceller),
 ) -> VisitOut:
     visit = get_visit_or_404(visit_id, session)
     ensure_visit_patient_scope(current_user, visit)
-    raise not_implemented("Module M6 - Lifecycle events and recompute")
+    try:
+        lifecycle_service.cancel(session, visit, current_user)
+    except InvalidTransitionError as exc:
+        raise conflict(str(exc)) from exc
+    return VisitOut.model_validate(visit)
 
 
-@router.post("/visits/{visit_id}/check-in", response_model=VisitOut)
+@router.post(
+    "/visits/{visit_id}/check-in",
+    response_model=VisitOut,
+    responses={409: {"description": "Visit isn't in BOOKED status."}},
+)
 def check_in_visit(
     visit_id: int,
-    current_user: User = Depends(require_receptionist),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_checkin),
 ) -> VisitOut:
-    raise not_implemented("Module M6 - Lifecycle events and recompute")
+    visit = get_visit_or_404(visit_id, session)
+    try:
+        lifecycle_service.check_in(session, visit, current_user)
+    except InvalidTransitionError as exc:
+        raise conflict(str(exc)) from exc
+    return VisitOut.model_validate(visit)
