@@ -103,3 +103,104 @@ The Mermaid diagram above is the source of truth. Before final submission, it wi
 `docs/architecture.png`
 
 The diagram should match the implemented system rather than an aspirational design — update it as modules land.
+
+## 6. Data Model (Module M1)
+
+```mermaid
+erDiagram
+    DEPARTMENT ||--o{ SERVICE : offers
+    DEPARTMENT ||--o{ PROVIDER : has
+    PROVIDER ||--o{ SLOT : generates
+    PROVIDER ||--o{ VISIT : serves
+    SERVICE ||--o{ VISIT : "requested as"
+    SLOT ||--o| VISIT : holds
+    PATIENT ||--o{ VISIT : books
+    USER ||--o| PROVIDER : "role=provider ->"
+    USER ||--o| PATIENT : "role=patient ->"
+    USER ||--o{ VISIT : "sets priority_flag on"
+    VISIT ||--o{ QUEUE_EVENT : generates
+    PROVIDER ||--o{ QUEUE_EVENT : "scoped to"
+    PROVIDER ||--o{ SERVICE_DURATION_STAT : has
+    SERVICE ||--o{ SERVICE_DURATION_STAT : has
+
+    DEPARTMENT {
+        int id PK
+        string code
+        string name
+        string kind "clinic | radiology"
+    }
+    SERVICE {
+        int id PK
+        int department_id FK
+        string name
+        int default_duration_min
+        int prep_time_min
+        bool is_active
+    }
+    PROVIDER {
+        int id PK
+        int department_id FK
+        string name
+        string kind "doctor | scanner"
+        string room_label
+        bool is_active
+        time shift_start
+        time shift_end
+        int slot_length_min
+        int slot_capacity
+        int overbook_limit
+    }
+    SLOT {
+        int id PK
+        int provider_id FK
+        datetime start_at
+        datetime end_at
+        int capacity
+        int booked_count
+    }
+    PATIENT {
+        int id PK
+        string full_name
+        string phone
+        bool is_simulated
+    }
+    USER {
+        int id PK
+        string username
+        string password_hash
+        string role "patient|receptionist|provider|admin"
+        int provider_id FK
+        int patient_id FK
+    }
+    VISIT {
+        int id PK
+        int patient_id FK
+        int provider_id FK
+        int service_id FK
+        int slot_id FK
+        string source "appointment | walkin"
+        string token_no
+        string status
+        int delay_minutes
+        bool priority_flag
+        int priority_set_by_user_id FK
+        int estimated_wait_min
+    }
+    QUEUE_EVENT {
+        int id PK
+        int visit_id FK
+        int provider_id FK
+        string type
+        json payload
+        datetime sim_time
+        int actor_user_id FK
+    }
+    SERVICE_DURATION_STAT {
+        int provider_id PK_FK
+        int service_id PK_FK
+        float ewma_minutes
+        int sample_count
+    }
+```
+
+No relationships are declared at the ORM level (SQLModel `Relationship()`); callers join explicitly by foreign-key id. `Visit` intentionally has no symptom or clinical field — `priority_flag`/`priority_reason` may only be set by an authorized staff user (`priority_set_by_user_id`) or the demo simulator. `ClinicSettings` and `SimClock` are single-row configuration tables (id fixed to `1`) and are omitted from the diagram above since they don't participate in any relationship.
