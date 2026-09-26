@@ -24,13 +24,13 @@ This file provides a simple progress record. Teams should update it at the annou
 
 ## Checkpoint 2 – Core Development
 
-- Time:
-- Current commit:
-- Backend / core logic progress:
-- Frontend progress:
-- Database/API progress:
-- Working features:
-- Blockers:
+- Time: 11:00 AM
+- Current commit: 11:00 AM
+- Backend / core logic progress: Models, seed, and the API contract are done.
+- Frontend progress: Working on design
+- Database/API progress: The 32-path OpenAPI surface exists, with the endpoints still on placeholders
+- Working features: Seeded database, error envelope, clock service, and password hashing
+- Blockers: NIL
 
 ## Checkpoint 3 – Integration
 
