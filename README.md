@@ -23,10 +23,10 @@
 
 | No. | Name | Register No. | GitHub Username | Primary Responsibility |
 |---|---|---|---|---|
-| 1 | TODO | TODO | TODO | TODO |
-| 2 | TODO | TODO | TODO | TODO |
-| 3 | TODO | TODO | TODO | TODO |
-| 4 | TODO | TODO | TODO | TODO |
+| 1 | SARVATARSHAN SANKAR | 23CB051 | sarva-20 | Backend Dev & Team Lead |
+| 2 | Prabakaran S R | 23CB031 | Prabakaransr19 | Algorithm Developer |
+| 3 | Danush Aditya | 23CB005 | DanushAditya | Data Engineer |
+| 4 | Rakesh Pranav K S | 23CB037 | RakeshPranav | Frontend Developer |
 
 ---
 

@@ -16,7 +16,7 @@ We also understand that only material pushed to the official repository before t
 
 | Name | GitHub Username | Main Contribution | Signature / Confirmation |
 |---|---|---|---|
-|  |  |  |  |
-|  |  |  |  |
-|  |  |  |  |
-|  |  |  |  |
+| SARVATARSHAN SANKAR | sarva-20 | Backend Dev & Team Lead |  |
+| Prabakaran S R | Prabakaransr19 | Algorithm Developer |  |
+| Danush Aditya | DanushAditya | Data Engineer |  |
+| Rakesh Pranav K S | RakeshPranav | Frontend Developer |  |
