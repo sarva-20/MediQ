@@ -10,6 +10,7 @@ import {
   removePriority 
 } from "../../mocks/store";
 import { useStoreRefresh, useSimClock, addToast } from "../../hooks/useQueueStore";
+import { useLang } from "../../lib/i18n";
 import { getElapsedMinutes, formatTime, formatWaitMinutes } from "../../lib/utils";
 import { 
   StatusPill, 
@@ -36,6 +37,7 @@ import {
 export default function QueueBoard() {
   useStoreRefresh(); // automatically triggers re-render on any store pub/sub event
   const { now: currentTime } = useSimClock();
+  const { t } = useLang();
   
   const providers = store.providers.filter(p => p.active);
   const [selectedProviderId, setSelectedProviderId] = useState(providers[0]?.id || "all");
@@ -46,32 +48,52 @@ export default function QueueBoard() {
   const [priorityReason, setPriorityReason] = useState("");
 
   const handleCheckIn = async (visitId) => {
-    await checkIn(visitId);
-    addToast("Patient checked in successfully");
+    try {
+      await checkIn(visitId);
+      addToast("Patient checked in successfully");
+    } catch (err) {
+      addToast(err.message || "Failed to check in", "error");
+    }
   };
 
   const handleCancel = async (visitId) => {
-    await cancelVisit(visitId);
-    addToast("Visit cancelled");
+    try {
+      await cancelVisit(visitId);
+      addToast("Visit cancelled");
+    } catch (err) {
+      addToast(err.message || "Failed to cancel visit", "error");
+    }
   };
 
   const handleNoShow = async (visitId) => {
-    await markNoShow(visitId);
-    addToast("Marked as no-show");
+    try {
+      await markNoShow(visitId);
+      addToast("Marked as no-show");
+    } catch (err) {
+      addToast(err.message || "Failed to mark no-show", "error");
+    }
   };
 
   const handleSetPriority = async () => {
     if (!priorityReason.trim() || !priorityVisit) return;
-    await setPriority(priorityVisit.id, priorityReason.trim());
-    addToast("Priority status updated with reason");
-    setPriorityModalOpen(false);
-    setPriorityReason("");
-    setPriorityVisit(null);
+    try {
+      await setPriority(priorityVisit.id, priorityReason.trim());
+      addToast("Priority status updated with reason");
+      setPriorityModalOpen(false);
+      setPriorityReason("");
+      setPriorityVisit(null);
+    } catch (err) {
+      addToast(err.message || "Failed to set priority", "error");
+    }
   };
 
   const handleRemovePriority = async (visitId) => {
-    await removePriority(visitId);
-    addToast("Priority removed");
+    try {
+      await removePriority(visitId);
+      addToast("Priority removed");
+    } catch (err) {
+      addToast(err.message || "Failed to remove priority", "error");
+    }
   };
 
   const openPriorityModal = (visit) => {
@@ -87,9 +109,9 @@ export default function QueueBoard() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-ink tracking-tight">Reception Queue Board</h1>
+          <h1 className="text-2xl font-bold text-ink tracking-tight">{t('reception_queue_title')}</h1>
           <p className="text-sm text-ink-muted mt-0.5">
-            Real-time departure-board queue dispatch, triage priority, and check-ins.
+            {t('reception_queue_subtitle')}
           </p>
         </div>
 
@@ -361,7 +383,7 @@ export default function QueueBoard() {
                                   className="px-2.5 py-1 text-xs font-semibold text-brand-700 bg-brand-100 hover:bg-brand-700 hover:text-white rounded border border-brand-500/30 transition-colors cursor-pointer"
                                   title="Check In Patient"
                                 >
-                                  Check In
+                                  {t('check_in')}
                                 </button>
                               )}
 

@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { useStoreRefresh, addToast } from '../../hooks/useQueueStore';
+import { useLang } from '../../lib/i18n';
 import { store, updateSettings, updateService, departments } from '../../mocks/store';
 import { Save, Edit2, Check, X, Sliders } from 'lucide-react';
 
 export default function SettingsServices() {
   useStoreRefresh();
+  const { t } = useLang();
   
   const [settingsForm, setSettingsForm] = useState(() => ({ ...store.settings }));
   const [editingRowKey, setEditingRowKey] = useState(null);
@@ -12,8 +14,12 @@ export default function SettingsServices() {
 
   const handleSaveSettings = async (e) => {
     e.preventDefault();
-    await updateSettings(settingsForm);
-    addToast('Global clinic settings updated');
+    try {
+      await updateSettings(settingsForm);
+      addToast('Global clinic settings updated');
+    } catch (err) {
+      addToast(err.message || 'Failed to update settings', 'error');
+    }
   };
 
   const handleStartEdit = (deptId, service) => {
@@ -22,16 +28,20 @@ export default function SettingsServices() {
   };
 
   const handleSaveService = async (deptId, serviceId) => {
-    await updateService(deptId, serviceId, editFormData);
-    setEditingRowKey(null);
-    addToast(`Updated service: ${editFormData.name}`);
+    try {
+      await updateService(deptId, serviceId, editFormData);
+      setEditingRowKey(null);
+      addToast(`Updated service: ${editFormData.name}`);
+    } catch (err) {
+      addToast(err.message || 'Failed to update service', 'error');
+    }
   };
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
       {/* Title */}
       <div>
-        <h1 className="text-2xl font-bold text-ink tracking-tight">Settings & Service Configuration</h1>
+        <h1 className="text-2xl font-bold text-ink tracking-tight">{t('settings_title')}</h1>
         <p className="text-sm text-ink-muted mt-0.5">
           Tune clinic queue thresholds, no-show rules, and clinical consultation durations.
         </p>

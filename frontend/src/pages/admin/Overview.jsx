@@ -1,5 +1,6 @@
 import React from 'react';
 import { useStoreRefresh, useSimClock } from '../../hooks/useQueueStore';
+import { useLang } from '../../lib/i18n';
 import { store, getMetrics } from '../../mocks/store';
 import { formatTime } from '../../lib/utils';
 import { 
@@ -25,6 +26,7 @@ import {
 
 export default function Overview() {
   useStoreRefresh();
+  const { t } = useLang();
   const { now: currentTime } = useSimClock();
   const metrics = getMetrics();
   
@@ -36,7 +38,7 @@ export default function Overview() {
       {/* Title */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-ink tracking-tight">Clinic Overview & KPI Metrics</h1>
+          <h1 className="text-2xl font-bold text-ink tracking-tight">{t('overview_title')}</h1>
           <p className="text-sm text-ink-muted mt-0.5">
             Real-time operational health, queue throughput, and clinical delay tracking.
           </p>

@@ -2,7 +2,7 @@ import re
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.models.enums import UserRole
+from app.models.enums import PatientType, UserRole
 
 _PHONE_RE = re.compile(r"^\+\d{1,3}\d{6,14}$")
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -41,6 +41,7 @@ class LoginResponse(BaseModel):
     user_id: int
     provider_id: int | None = None
     patient_id: int | None = None
+    patient_type: PatientType | None = None
 
 
 class UserOut(BaseModel):

@@ -14,17 +14,38 @@ import {
   Calendar,
   Sparkles
 } from 'lucide-react';
-import { 
-  departments, 
-  getDepartmentProviders, 
-  getSlotAvailability, 
+import {
+  departments,
+  getDepartmentProviders,
+  getSlotAvailability,
   bookAppointment,
+  fetchBookingWindows,
   store,
   simDate
 } from '../../mocks/store';
-import { useSimClock, addToast } from '../../hooks/useQueueStore';
+import { useSimClock, useAuth, addToast } from '../../hooks/useQueueStore';
+import { useLang } from '../../lib/i18n';
 import { formatTime, formatDate, DEMO_PATIENT, DEMO_PATIENT_PHONE } from '../../lib/utils';
 import { TokenDisplay, SkeletonRows, EmptyState } from '../../components/shared';
+
+function parseHM(str) {
+  const [h, m] = String(str).split(':').map(Number);
+  return h * 60 + (m || 0);
+}
+function minutesOfDay(ms) {
+  // Provider shifts and ClinicSettings windows are UTC-naive wall-clock times
+  // (see backend docstrings) — compare in UTC, not the browser's local zone.
+  const d = new Date(ms);
+  return d.getUTCHours() * 60 + d.getUTCMinutes();
+}
+// Which patient-type window (if any) a slot's clock-time falls in.
+function zoneFor(ms, windows) {
+  if (!windows) return null;
+  const mod = minutesOfDay(ms);
+  if (mod >= parseHM(windows.in_patient_window_start) && mod < parseHM(windows.in_patient_window_end)) return 'in';
+  if (mod >= parseHM(windows.out_patient_window_start) && mod < parseHM(windows.out_patient_window_end)) return 'out';
+  return 'other';
+}
 
 const ICON_MAP = {
   stethoscope: Stethoscope,
@@ -37,7 +58,15 @@ export default function BookAppointment() {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const { now: currentTime } = useSimClock();
-  
+  const { user } = useAuth();
+  const { t } = useLang();
+  const patientType = user?.patientType || 'out';
+
+  const [windows, setWindows] = useState(null);
+  useEffect(() => {
+    fetchBookingWindows().then(setWindows).catch(() => setWindows(null));
+  }, []);
+
   // Selections
   const [department, setDepartment] = useState(null);
   const [service, setService] = useState(null);
@@ -47,6 +76,10 @@ export default function BookAppointment() {
   
   // Final booked visit
   const [bookedVisit, setBookedVisit] = useState(null);
+
+  // Slot grid — fetched directly (async), not read from the sync cache.
+  const [availableSlots, setAvailableSlots] = useState([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
 
   // Initialize date selection to today's sim date
   useEffect(() => {
@@ -58,6 +91,48 @@ export default function BookAppointment() {
       setDateStr(`${year}-${month}-${day}`);
     }
   }, [dateStr]);
+
+  // Component-level (not inside renderStep3) so the slot-fetch effect below
+  // can depend on them — hooks can't live inside a conditionally-called
+  // render helper.
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = simDate();
+    d.setDate(d.getDate() + i);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const dStr = `${year}-${month}-${day}`;
+    const dayName = i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : d.toLocaleDateString('en-IN', { weekday: 'short' });
+    const dateNum = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+    return { dateStr: dStr, dayName, dateNum, timestamp: d.getTime() };
+  });
+  const selectedDayObj = days.find(d => d.dateStr === dateStr) || days[0];
+  const activeProvider = providerId === 'any'
+    ? (department ? getDepartmentProviders(department.id)[0] : null)
+    : store.providers.find(p => p.id === providerId);
+
+  useEffect(() => {
+    if (step !== 3 || !activeProvider) {
+      setAvailableSlots([]);
+      return;
+    }
+    let cancelled = false;
+    setSlotsLoading(true);
+    getSlotAvailability(activeProvider.id, selectedDayObj.timestamp)
+      .then((slots) => {
+        if (!cancelled) setAvailableSlots(slots);
+      })
+      .catch(() => {
+        if (!cancelled) addToast('Failed to load slots for that date', 'error');
+      })
+      .finally(() => {
+        if (!cancelled) setSlotsLoading(false);
+      });
+    return () => { cancelled = true; };
+    // `selectedDayObj.timestamp` is derived from simDate() and drifts every
+    // render — depend on the stable dateStr instead, or this refires forever.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, activeProvider?.id, selectedDayObj.dateStr]);
 
   const handleNextStep = (nextStep) => {
     setLoading(true);
@@ -92,7 +167,7 @@ export default function BookAppointment() {
       setStep('done');
       addToast('Appointment booked successfully!');
     } catch (err) {
-      addToast('Failed to book appointment', 'error');
+      addToast(err.message || 'Failed to book appointment', 'error');
     } finally {
       setLoading(false);
     }
@@ -266,24 +341,6 @@ export default function BookAppointment() {
 
   const renderStep3 = () => {
     if (!department || !service || !providerId) return null;
-    
-    // Generate next 7 days based on sim date
-    const days = Array.from({ length: 7 }, (_, i) => {
-      const d = simDate();
-      d.setDate(d.getDate() + i);
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      const dStr = `${year}-${month}-${day}`;
-      
-      const dayName = i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : d.toLocaleDateString('en-IN', { weekday: 'short' });
-      const dateNum = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
-      return { dateStr: dStr, dayName, dateNum, timestamp: d.getTime() };
-    });
-
-    const activeProvider = providerId === 'any' ? getDepartmentProviders(department.id)[0] : store.providers.find(p => p.id === providerId);
-    const selectedDayObj = days.find(d => d.dateStr === dateStr) || days[0];
-    const availableSlots = activeProvider ? getSlotAvailability(activeProvider.id, selectedDayObj.timestamp) : [];
 
     return (
       <div className="space-y-6">
@@ -342,30 +399,60 @@ export default function BookAppointment() {
             </span>
           </div>
 
-          {availableSlots.length > 0 ? (
+          {/* Color legend */}
+          <div className="flex items-center gap-4 mb-3 text-[11px] text-ink-muted flex-wrap">
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-status-inservice" /> Your window ({t(patientType === 'in' ? 'in_patient' : 'out_patient')})</span>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-hairline" /> Other patient type's window</span>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-status-noshow" /> Fully booked</span>
+          </div>
+
+          {slotsLoading ? (
+            <SkeletonRows rows={2} />
+          ) : availableSlots.length > 0 ? (
             <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2.5">
-              {availableSlots.map((s) => {
+              {availableSlots.map((s, idx) => {
                 const isSelected = slot?.time === s.time;
                 const isFull = s.full;
-                
+                const zone = zoneFor(s.time, windows);
+                const inMyWindow = zone === patientType;
+                const isBookable = !isFull && inMyWindow;
+
+                // Lunch-break divider: render once, right where the gap in
+                // slot times crosses the configured break window.
+                const prev = availableSlots[idx - 1];
+                const breakStart = windows ? parseHM(windows.lunch_break_start) : null;
+                const showBreakDivider =
+                  windows && prev && minutesOfDay(prev.time) < breakStart && minutesOfDay(s.time) >= parseHM(windows.lunch_break_end);
+
                 return (
-                  <button
-                    key={s.time}
-                    disabled={isFull}
-                    onClick={() => setSlot(s)}
-                    className={`p-3 rounded-lg border text-center transition-all cursor-pointer ${
-                      isFull 
-                        ? 'opacity-40 cursor-not-allowed bg-canvas border-hairline text-ink-muted' 
-                        : isSelected
-                          ? 'border-brand-500 bg-brand-100 ring-2 ring-brand-500 text-brand-700 font-bold'
-                          : 'border-hairline hover:border-brand-500 bg-surface text-ink'
-                    }`}
-                  >
-                    <div className="text-sm font-semibold tabular-nums">{formatTime(s.time)}</div>
-                    <div className={`text-[11px] mt-1 tabular-nums ${isFull ? 'text-status-noshow font-medium' : 'text-ink-muted'}`}>
-                      {isFull ? 'Fully Booked' : `${s.available} left`}
-                    </div>
-                  </button>
+                  <React.Fragment key={s.time}>
+                    {showBreakDivider && (
+                      <div className="col-span-2 sm:col-span-4 md:col-span-6 flex items-center gap-2 py-1 text-[11px] font-semibold text-accent-amber uppercase tracking-wider">
+                        <span className="flex-1 border-t border-dashed border-accent-amber/40" />
+                        Lunch Break ({windows.lunch_break_start.slice(0, 5)}–{windows.lunch_break_end.slice(0, 5)})
+                        <span className="flex-1 border-t border-dashed border-accent-amber/40" />
+                      </div>
+                    )}
+                    <button
+                      disabled={!isBookable}
+                      onClick={() => setSlot(s)}
+                      title={!inMyWindow ? `Reserved for ${zone}-patients` : undefined}
+                      className={`p-3 rounded-lg border text-center transition-all ${
+                        isFull
+                          ? 'opacity-40 cursor-not-allowed bg-status-noshow/5 border-status-noshow/20 text-ink-muted'
+                          : !inMyWindow
+                            ? 'opacity-50 cursor-not-allowed bg-canvas border-hairline text-ink-muted'
+                            : isSelected
+                              ? 'cursor-pointer border-brand-500 bg-brand-100 ring-2 ring-brand-500 text-brand-700 font-bold'
+                              : 'cursor-pointer border-status-inservice/40 hover:border-status-inservice bg-status-inservice/5 text-ink'
+                      }`}
+                    >
+                      <div className="text-sm font-semibold tabular-nums">{formatTime(s.time)}</div>
+                      <div className={`text-[11px] mt-1 tabular-nums ${isFull ? 'text-status-noshow font-medium' : 'text-ink-muted'}`}>
+                        {isFull ? 'Fully Booked' : !inMyWindow ? `${zone}-patients only` : `${s.available} left`}
+                      </div>
+                    </button>
+                  </React.Fragment>
                 );
               })}
             </div>

@@ -9,15 +9,17 @@ import {
   Stethoscope,
   ChevronRight
 } from 'lucide-react';
-import { 
-  store, 
-  getProviderNowServing, 
-  getProviderWaiting, 
-  startVisit, 
-  delayVisit, 
+import {
+  store,
+  getProviderNowServing,
+  getProviderWaiting,
+  startVisit,
+  delayVisit,
   completeVisit,
-  getProviderVisits
+  getProviderVisits,
+  addPrescription
 } from '../../mocks/store';
+import { useLang } from '../../lib/i18n';
 import { useAuth } from '../../hooks/useQueueStore';
 import { useStoreRefresh, useSimClock, addToast } from '../../hooks/useQueueStore';
 import { formatTime, getElapsedMinutes, formatWaitMinutes } from '../../lib/utils';
@@ -44,6 +46,7 @@ function ElapsedTimer({ startTime, currentTime }) {
 
 export default function ProviderQueue() {
   const { user } = useAuth();
+  const { t } = useLang();
   useStoreRefresh();
   const { now: currentTime } = useSimClock();
   
@@ -67,30 +70,61 @@ export default function ProviderQueue() {
   const [delayMinutes, setDelayMinutes] = useState(8);
   const [delayReason, setDelayReason] = useState('');
 
+  // Prescription Modal
+  const [isRxModalOpen, setIsRxModalOpen] = useState(false);
+  const [rxMedications, setRxMedications] = useState('');
+  const [rxNotes, setRxNotes] = useState('');
+
+  const handleAddPrescription = async (e) => {
+    e.preventDefault();
+    if (!nowServing || !rxMedications.trim()) return;
+    try {
+      await addPrescription(nowServing.id, { medications: rxMedications.trim(), notes: rxNotes.trim() || null });
+      addToast('Prescription added for patient');
+      setIsRxModalOpen(false);
+      setRxMedications('');
+      setRxNotes('');
+    } catch (err) {
+      addToast(err.message || 'Failed to add prescription', 'error');
+    }
+  };
+
   const handleStart = async (visitId) => {
-    await startVisit(visitId);
-    addToast('Patient consultation started');
+    try {
+      await startVisit(visitId);
+      addToast('Patient consultation started');
+    } catch (err) {
+      addToast(err.message || 'Failed to start consultation', 'error');
+    }
   };
 
   const handleComplete = async (visitId) => {
-    await completeVisit(visitId);
-    addToast('Consultation marked completed');
+    try {
+      await completeVisit(visitId);
+      addToast('Consultation marked completed');
+    } catch (err) {
+      addToast(err.message || 'Failed to complete consultation', 'error');
+    }
   };
 
   const handleDelaySubmit = async (e) => {
     e.preventDefault();
     if (!nowServing) return;
-    
+
     if (!delayReason.trim()) {
       addToast('Please provide a reason for the delay', 'error');
       return;
     }
-    
-    await delayVisit(nowServing.id, parseInt(delayMinutes, 10), delayReason.trim());
-    setIsDelayModalOpen(false);
-    setDelayMinutes(8);
-    setDelayReason('');
-    addToast(`Added +${delayMinutes} min delay with explainability reason`);
+
+    try {
+      await delayVisit(nowServing.id, parseInt(delayMinutes, 10), delayReason.trim());
+      setIsDelayModalOpen(false);
+      setDelayMinutes(8);
+      setDelayReason('');
+      addToast(`Added +${delayMinutes} min delay with explainability reason`);
+    } catch (err) {
+      addToast(err.message || 'Failed to add delay', 'error');
+    }
   };
 
   if (!provider) {
@@ -103,7 +137,7 @@ export default function ProviderQueue() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-hairline pb-4">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-ink tracking-tight">Provider Operations Console</h1>
+            <h1 className="text-2xl font-bold text-ink tracking-tight">{t('provider_console_title')}</h1>
             <span className="text-xs px-2 py-0.5 rounded bg-brand-100 text-brand-700 font-semibold font-mono">
               {provider.room}
             </span>
@@ -139,7 +173,7 @@ export default function ProviderQueue() {
           <section>
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-xs font-bold uppercase tracking-wider text-ink-muted">
-                Active Consultation Room
+                {t('active_consultation')}
               </h2>
               {nowServing && (
                 <span className="text-xs text-status-inservice font-semibold flex items-center gap-1">
@@ -190,13 +224,19 @@ export default function ProviderQueue() {
 
                 {/* Hero Actions */}
                 <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-hairline">
-                  <button 
+                  <button
+                    onClick={() => setIsRxModalOpen(true)}
+                    className="px-4 py-2 rounded-lg text-xs font-semibold text-brand-700 bg-brand-100 hover:bg-brand-100/70 border border-brand-500/30 transition-colors cursor-pointer"
+                  >
+                    + {t('add_prescription')}
+                  </button>
+                  <button
                     onClick={() => setIsDelayModalOpen(true)}
                     className="px-4 py-2 rounded-lg text-xs font-semibold text-status-delayed bg-status-delayed/10 hover:bg-status-delayed/20 border border-status-delayed/30 transition-colors cursor-pointer"
                   >
-                    + Add Overrun Delay
+                    {t('add_overrun_delay')}
                   </button>
-                  <button 
+                  <button
                     onClick={() => handleComplete(nowServing.id)}
                     className="px-5 py-2 rounded-lg text-xs font-semibold text-white bg-status-inservice hover:opacity-90 transition-opacity flex items-center gap-1.5 cursor-pointer shadow-sm"
                   >
@@ -220,7 +260,7 @@ export default function ProviderQueue() {
                     className="px-6 py-2.5 rounded-lg text-xs font-semibold text-white bg-brand-700 hover:bg-brand-500 transition-colors flex items-center gap-2 cursor-pointer shadow-sm"
                   >
                     <Play size={14} />
-                    Call Next Patient ({nextUp[0].token} — {nextUp[0].patient})
+                    {t('call_next_patient')} ({nextUp[0].token} — {nextUp[0].patient})
                   </button>
                 ) : (
                   <span className="text-xs text-ink-muted italic">No patients waiting in queue</span>
@@ -233,7 +273,7 @@ export default function ProviderQueue() {
           <section>
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-xs font-bold uppercase tracking-wider text-ink-muted">
-                Upcoming Queue ({waitingVisits.length} waiting)
+                {t('upcoming_queue')} ({waitingVisits.length} waiting)
               </h2>
               <span className="text-xs text-ink-muted">Showing next {nextUp.length}</span>
             </div>
@@ -274,7 +314,7 @@ export default function ProviderQueue() {
                           onClick={() => handleStart(visit.id)}
                           className="px-3 py-1.5 bg-brand-700 text-white rounded-md text-xs font-semibold hover:bg-brand-500 transition-colors flex items-center gap-1 cursor-pointer"
                         >
-                          <Play size={12} /> Call Now
+                          <Play size={12} /> {t('call_now')}
                         </button>
                       )}
                     </div>
@@ -296,14 +336,14 @@ export default function ProviderQueue() {
         {/* Right Column — Kanban Style (Waiting -> In Service -> Done Today) */}
         <div className="space-y-4">
           <h2 className="text-xs font-bold uppercase tracking-wider text-ink-muted">
-            Today's Flow Kanban
+            {t('todays_flow')}
           </h2>
 
           {/* Column 1: Waiting */}
           <div className="card p-3.5 bg-canvas/40">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-bold uppercase tracking-wider text-status-waiting">
-                Waiting ({waitingVisits.length})
+                {t('waiting')} ({waitingVisits.length})
               </span>
             </div>
             <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
@@ -357,7 +397,7 @@ export default function ProviderQueue() {
           <div className="card p-3.5 bg-canvas/40">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-bold uppercase tracking-wider text-ink-muted">
-                Done Today ({doneVisits.length})
+                {t('done_today')} ({doneVisits.length})
               </span>
             </div>
             <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
@@ -438,6 +478,57 @@ export default function ProviderQueue() {
               className="px-4 py-2 rounded-md bg-status-delayed text-white text-xs font-semibold hover:opacity-90 disabled:opacity-40 transition-opacity cursor-pointer"
             >
               Apply Delay & Recompute ETAs
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Prescription Modal */}
+      <Modal
+        open={isRxModalOpen}
+        onClose={() => setIsRxModalOpen(false)}
+        title={`${t('add_prescription')} — ${nowServing?.patient}`}
+      >
+        <form onSubmit={handleAddPrescription} className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-ink mb-1">
+              {t('medications')} <span className="text-status-noshow">*</span>
+            </label>
+            <textarea
+              rows={3}
+              value={rxMedications}
+              onChange={e => setRxMedications(e.target.value)}
+              className="w-full rounded-md border border-hairline p-2 text-sm text-ink focus:outline-none focus:border-brand-500"
+              placeholder="e.g. Paracetamol 500mg — 1 tablet twice daily x 3 days"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-ink mb-1">
+              {t('notes')}
+            </label>
+            <textarea
+              rows={2}
+              value={rxNotes}
+              onChange={e => setRxNotes(e.target.value)}
+              className="w-full rounded-md border border-hairline p-2 text-sm text-ink focus:outline-none focus:border-brand-500"
+              placeholder="e.g. Take after food; review in 5 days if symptoms persist"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-3 border-t border-hairline">
+            <button
+              type="button"
+              onClick={() => setIsRxModalOpen(false)}
+              className="px-4 py-2 rounded-md text-xs font-semibold text-ink border border-hairline hover:bg-canvas cursor-pointer"
+            >
+              {t('cancel')}
+            </button>
+            <button
+              type="submit"
+              disabled={!rxMedications.trim()}
+              className="px-4 py-2 rounded-md bg-brand-700 text-white text-xs font-semibold hover:bg-brand-500 disabled:opacity-40 transition-colors cursor-pointer"
+            >
+              {t('save')}
             </button>
           </div>
         </form>

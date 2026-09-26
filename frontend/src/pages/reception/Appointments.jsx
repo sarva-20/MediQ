@@ -2,6 +2,7 @@ import React, { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { store, departments } from "../../mocks/store";
 import { useStoreRefresh } from "../../hooks/useQueueStore";
+import { useLang } from "../../lib/i18n";
 import { 
   StatusPill, 
   SourceBadge, 
@@ -24,6 +25,7 @@ const FILTERS = {
 
 export default function Appointments() {
   useStoreRefresh();
+  const { t } = useLang();
   
   const [filter, setFilter] = useState("all");
   const allVisits = store.visits;
@@ -73,7 +75,7 @@ export default function Appointments() {
       {/* Page Title */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-ink tracking-tight">Clinic Appointment Roster</h1>
+          <h1 className="text-2xl font-bold text-ink tracking-tight">{t('appointments_roster_title')}</h1>
           <p className="text-sm text-ink-muted mt-0.5">
             Complete master list of booked appointments and walk-in clinic tokens.
           </p>

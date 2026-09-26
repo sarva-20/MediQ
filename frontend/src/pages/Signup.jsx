@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth, addToast } from '../hooks/useQueueStore';
-import { createAccount } from '../mocks/store';
+import { createAccount, refreshRealCacheNow } from '../mocks/store';
 import { 
   User, 
   Phone, 
@@ -16,6 +16,7 @@ import {
   Stethoscope
 } from 'lucide-react';
 import { TokenDisplay } from '../components/shared';
+import { useLang } from '../lib/i18n';
 
 export default function Signup() {
   const [name, setName] = useState('');
@@ -29,6 +30,7 @@ export default function Signup() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { login } = useAuth();
+  const { t } = useLang();
   const navigate = useNavigate();
 
   // Validate inputs client-side
@@ -92,14 +94,19 @@ export default function Signup() {
         role: 'patient',
         email: newUser.email,
         phone: newUser.phone,
+        token: newUser.token,
+        userId: newUser.userId,
+        patientId: newUser.patientId,
+        patientType: newUser.patientType,
       });
+      await refreshRealCacheNow();
 
       addToast(`Welcome to MediQ, ${newUser.name}! Your account is ready.`);
       
       // Redirect to Patient Dashboard screen
       navigate('/patient/dashboard');
     } catch (err) {
-      addToast('Failed to create account. Please try again.', 'error');
+      addToast(err.message || 'Failed to create account. Please try again.', 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -219,10 +226,10 @@ export default function Signup() {
           <div>
             <span className="text-xs font-bold uppercase tracking-wider text-brand-700">Patient Onboarding</span>
             <h2 className="text-2xl sm:text-3xl font-bold text-ink tracking-tight mt-1">
-              Create your account
+              {t('create_account')}
             </h2>
             <p className="text-xs sm:text-sm text-ink-muted mt-1 leading-relaxed">
-              Register as a patient to schedule appointments, view departure-board tokens, and receive live wait alerts.
+              {t('create_account_subtitle')}
             </p>
           </div>
 
@@ -232,7 +239,7 @@ export default function Signup() {
             {/* Full Name */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-ink mb-1 flex items-center gap-1">
-                <User size={13} className="text-ink-muted" /> Full Name <span className="text-status-noshow">*</span>
+                <User size={13} className="text-ink-muted" /> {t('full_name')} <span className="text-status-noshow">*</span>
               </label>
               <input 
                 type="text" 
@@ -254,7 +261,7 @@ export default function Signup() {
             {/* Phone Number */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-ink mb-1 flex items-center gap-1">
-                <Phone size={13} className="text-ink-muted" /> Mobile Phone Number <span className="text-status-noshow">*</span>
+                <Phone size={13} className="text-ink-muted" /> {t('mobile_phone')} <span className="text-status-noshow">*</span>
               </label>
               <input 
                 type="tel" 
@@ -279,7 +286,7 @@ export default function Signup() {
             {/* Email */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-ink mb-1 flex items-center gap-1">
-                <Mail size={13} className="text-ink-muted" /> Email Address <span className="text-status-noshow">*</span>
+                <Mail size={13} className="text-ink-muted" /> {t('email_address')} <span className="text-status-noshow">*</span>
               </label>
               <input 
                 type="email" 
@@ -302,7 +309,7 @@ export default function Signup() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-ink mb-1 flex items-center gap-1">
-                  <Lock size={13} className="text-ink-muted" /> Password <span className="text-status-noshow">*</span>
+                  <Lock size={13} className="text-ink-muted" /> {t('password')} <span className="text-status-noshow">*</span>
                 </label>
                 <input 
                   type="password" 
@@ -323,7 +330,7 @@ export default function Signup() {
 
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-ink mb-1 flex items-center gap-1">
-                  <Lock size={13} className="text-ink-muted" /> Confirm Password <span className="text-status-noshow">*</span>
+                  <Lock size={13} className="text-ink-muted" /> {t('confirm_password')} <span className="text-status-noshow">*</span>
                 </label>
                 <input 
                   type="password" 
@@ -350,7 +357,7 @@ export default function Signup() {
                 disabled={isSubmitting}
                 className="w-full py-3 bg-accent-amber text-white rounded-lg text-sm font-semibold hover:bg-accent-amber/90 transition-colors shadow-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
               >
-                {isSubmitting ? "Creating Account..." : "Create Account"}
+                {isSubmitting ? "Creating Account..." : t('create_account')}
                 <ArrowRight size={15} />
               </button>
             </div>
@@ -360,7 +367,7 @@ export default function Signup() {
           {/* Bottom Login Link & Return Home */}
           <div className="pt-3 border-t border-hairline flex flex-col sm:flex-row items-center justify-between text-xs text-ink-muted gap-2">
             <div>
-              Already have an account?{' '}
+              {t('already_have_account')}{' '}
               <Link to="/login" className="font-bold text-accent-amber hover:underline">
                 Log in to MediQ
               </Link>

@@ -1,12 +1,15 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { departments, store, createWalkIn } from "../../mocks/store";
-import { addToast } from "../../hooks/useQueueStore";
+import { addToast, useStoreRefresh } from "../../hooks/useQueueStore";
+import { useLang } from "../../lib/i18n";
 import { WaitBadge, TokenDisplay } from "../../components/shared";
 import { QRCodeSVG } from "qrcode.react";
 import { User, Phone, MapPin, Activity, Stethoscope, Printer, RefreshCw, ExternalLink } from "lucide-react";
 
 export default function WalkIn() {
+  useStoreRefresh();
+  const { t } = useLang();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [deptId, setDeptId] = useState(departments[0]?.id || "");
@@ -17,6 +20,15 @@ export default function WalkIn() {
 
   const selectedDept = departments.find(d => d.id === deptId);
   const deptProviders = store.providers.filter(p => p.department === deptId && p.active);
+
+  // departments/services load asynchronously in real mode — fill in the
+  // defaults once they arrive instead of freezing on an empty first render.
+  useEffect(() => {
+    if (!deptId && departments[0]) {
+      setDeptId(departments[0].id);
+      setServiceId(departments[0].services[0]?.id || "");
+    }
+  }, [deptId, departments.length]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -40,7 +52,7 @@ export default function WalkIn() {
       });
       addToast(`Walk-in registered! Assigned Token: ${visit.token}`);
     } catch (err) {
-      addToast("Failed to register walk-in patient", "error");
+      addToast(err.message || "Failed to register walk-in patient", "error");
     } finally {
       setLoading(false);
     }
@@ -137,16 +149,16 @@ export default function WalkIn() {
     <div className="max-w-xl mx-auto space-y-6">
       <div className="card p-6 sm:p-8">
         <div className="mb-6">
-          <h2 className="text-2xl font-bold text-ink tracking-tight">Register Walk-in Patient</h2>
+          <h2 className="text-2xl font-bold text-ink tracking-tight">{t('walkin_title')}</h2>
           <p className="text-sm text-ink-muted mt-0.5">
-            Instant token generation with automatic shortest-wait routing.
+            {t('walkin_subtitle')}
           </p>
         </div>
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider mb-1.5 text-ink flex items-center gap-1">
-              <User className="w-3.5 h-3.5 text-ink-muted" /> Patient Full Name <span className="text-status-noshow">*</span>
+              <User className="w-3.5 h-3.5 text-ink-muted" /> {t('patient_full_name')} <span className="text-status-noshow">*</span>
             </label>
             <input 
               type="text" 
@@ -160,7 +172,7 @@ export default function WalkIn() {
 
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider mb-1.5 text-ink flex items-center gap-1">
-              <Phone className="w-3.5 h-3.5 text-ink-muted" /> Phone Number <span className="text-status-noshow">*</span>
+              <Phone className="w-3.5 h-3.5 text-ink-muted" /> {t('phone_number')} <span className="text-status-noshow">*</span>
             </label>
             <input 
               type="tel" 
@@ -175,7 +187,7 @@ export default function WalkIn() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-hairline">
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider mb-1.5 text-ink flex items-center gap-1">
-                <MapPin className="w-3.5 h-3.5 text-ink-muted" /> Department
+                <MapPin className="w-3.5 h-3.5 text-ink-muted" /> {t('department')}
               </label>
               <select 
                 value={deptId}
@@ -195,7 +207,7 @@ export default function WalkIn() {
 
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider mb-1.5 text-ink flex items-center gap-1">
-                <Activity className="w-3.5 h-3.5 text-ink-muted" /> Service Required
+                <Activity className="w-3.5 h-3.5 text-ink-muted" /> {t('service_required')}
               </label>
               <select 
                 value={serviceId}
@@ -211,7 +223,7 @@ export default function WalkIn() {
           
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider mb-1.5 text-ink flex items-center gap-1">
-              <Stethoscope className="w-3.5 h-3.5 text-ink-muted" /> Medical Practitioner Assignment
+              <Stethoscope className="w-3.5 h-3.5 text-ink-muted" /> {t('practitioner_assignment')}
             </label>
             <select 
               value={providerId}
@@ -231,7 +243,7 @@ export default function WalkIn() {
               disabled={!name.trim() || !phone.trim() || loading}
               className="w-full py-3 bg-brand-700 text-white rounded-lg text-sm font-semibold hover:bg-brand-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-sm"
             >
-              {loading ? "Generating Token..." : "Generate Walk-In Token"}
+              {loading ? "Generating Token..." : t('generate_token')}
             </button>
           </div>
         </form>

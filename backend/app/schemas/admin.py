@@ -12,6 +12,12 @@ class ClinicSettingsOut(BaseModel):
     default_overbook_limit: int
     ewma_alpha: float
     walkin_routing_enabled: bool
+    in_patient_window_start: time
+    in_patient_window_end: time
+    out_patient_window_start: time
+    out_patient_window_end: time
+    lunch_break_start: time
+    lunch_break_end: time
 
 
 class ClinicSettingsUpdate(BaseModel):
@@ -19,6 +25,12 @@ class ClinicSettingsUpdate(BaseModel):
     default_overbook_limit: int | None = Field(default=None, ge=0)
     ewma_alpha: float | None = Field(default=None, gt=0, le=1)
     walkin_routing_enabled: bool | None = None
+    in_patient_window_start: time | None = None
+    in_patient_window_end: time | None = None
+    out_patient_window_start: time | None = None
+    out_patient_window_end: time | None = None
+    lunch_break_start: time | None = None
+    lunch_break_end: time | None = None
 
 
 class ServiceUpdate(BaseModel):

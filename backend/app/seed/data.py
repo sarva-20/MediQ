@@ -149,7 +149,9 @@ PROVIDER_SLOT_CONFIG = {
         "shift_end": time(17, 0),
         "slot_length_min": 15,
         "slot_capacity": 1,
-        "overbook_limit": 1,
+        # 0, not 1: a slot must lock after its single booking — no overbooking
+        # past capacity=1, so once taken it's unclickable for every other user.
+        "overbook_limit": 0,
     },
     ProviderKind.SCANNER: {
         "shift_start": time(9, 0),

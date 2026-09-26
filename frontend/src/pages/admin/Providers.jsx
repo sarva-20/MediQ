@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useStoreRefresh, addToast } from '../../hooks/useQueueStore';
+import { useLang } from '../../lib/i18n';
 import { 
   store, 
   updateProvider, 
@@ -12,6 +13,7 @@ import { Modal } from '../../components/shared';
 
 export default function Providers() {
   useStoreRefresh();
+  const { t } = useLang();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingProvider, setEditingProvider] = useState(null);
   
@@ -26,8 +28,12 @@ export default function Providers() {
   };
 
   const handleToggleActive = async (id) => {
-    const updated = await deactivateProvider(id);
-    addToast(`${updated.name} ${updated.active ? 'activated' : 'deactivated'}`);
+    try {
+      const updated = await deactivateProvider(id);
+      addToast(`${updated.name} ${updated.active ? 'activated' : 'deactivated'}`);
+    } catch (err) {
+      addToast(err.message || 'Failed to update provider', 'error');
+    }
   };
 
   const getDeptName = (deptId) => {
@@ -39,7 +45,7 @@ export default function Providers() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-ink tracking-tight">Clinical Practitioners & Staff</h1>
+          <h1 className="text-2xl font-bold text-ink tracking-tight">{t('providers_title')}</h1>
           <p className="text-sm text-ink-muted mt-0.5">
             Manage provider roster, consultation shift windows, and slot capacity limits.
           </p>
@@ -165,14 +171,18 @@ function ProviderModal({ provider, onClose }) {
     e.preventDefault();
     if (!formData.name.trim() || !formData.room.trim()) return;
 
-    if (provider) {
-      await updateProvider(provider.id, formData);
-      addToast(`Updated ${formData.name}`);
-    } else {
-      await addProvider(formData);
-      addToast(`Added new practitioner: ${formData.name}`);
+    try {
+      if (provider) {
+        await updateProvider(provider.id, formData);
+        addToast(`Updated ${formData.name}`);
+      } else {
+        await addProvider(formData);
+        addToast(`Added new practitioner: ${formData.name}`);
+      }
+      onClose();
+    } catch (err) {
+      addToast(err.message || 'Failed to save practitioner', 'error');
     }
-    onClose();
   };
 
   return (

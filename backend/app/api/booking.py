@@ -12,6 +12,7 @@ from app.api.deps import (
     get_visit_or_404,
     not_found,
     require_roles,
+    validation_error,
 )
 from app.core.db import get_session
 from app.models.enums import UserRole, VisitStatus
@@ -24,7 +25,7 @@ from app.schemas.booking import AppointmentCreate
 from app.schemas.common import Page
 from app.schemas.visit import VisitOut
 from app.services import booking_service, lifecycle_service
-from app.services.errors import ConflictError, NotFoundError
+from app.services.errors import BusinessValidationError, ConflictError, NotFoundError
 from app.services.lifecycle_service import InvalidTransitionError
 
 router = APIRouter(tags=["booking"])
@@ -61,6 +62,8 @@ def create_appointment(
         raise not_found(str(exc)) from exc
     except ConflictError as exc:
         raise conflict(str(exc)) from exc
+    except BusinessValidationError as exc:
+        raise validation_error(str(exc)) from exc
     return VisitOut.model_validate(visit)
 
 

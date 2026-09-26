@@ -25,6 +25,14 @@ class VisitStatus(StrEnum):
     NO_SHOW = "no_show"
 
 
+class PatientType(StrEnum):
+    """IN-patients (admitted) and OUT-patients (walk-in/ambulatory) book against
+    separate time windows — see ClinicSettings.in_patient_window_*/out_patient_window_*."""
+
+    IN = "in"
+    OUT = "out"
+
+
 class UserRole(StrEnum):
     PATIENT = "patient"
     RECEPTIONIST = "receptionist"

@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
+from app.models.clinic_settings import SETTINGS_ROW_ID, ClinicSettings
 from app.models.patient import Patient
 from tests.conftest import AuthFixture
 from tests.helpers import auth_header
@@ -75,7 +76,16 @@ def test_capacity_full_rejects_and_overbook_allowed_up_to_limit(
     client: TestClient, auth_fixture: AuthFixture, session: Session
 ) -> None:
     # provider.slot_capacity=1 (default), overbook_limit=None -> falls back to
-    # ClinicSettings.default_overbook_limit=2, so 1 base + 2 overbook = 3 fit.
+    # ClinicSettings.default_overbook_limit; set to 2 here (product default is
+    # 0 — slots lock after one booking — but the overbook mechanism itself
+    # must still work when a clinic opts into it), so 1 base + 2 overbook = 3 fit.
+    settings = session.get(ClinicSettings, SETTINGS_ROW_ID)
+    if settings is None:
+        settings = ClinicSettings(id=SETTINGS_ROW_ID)
+    settings.default_overbook_limit = 2
+    session.add(settings)
+    session.commit()
+
     slot = _slots(client, auth_fixture.provider.id)[0]
     receptionist = auth_header(auth_fixture.receptionist.id)
 

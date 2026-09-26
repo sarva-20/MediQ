@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthContext } from "./hooks/useQueueStore";
+import { LangProvider } from "./lib/i18n";
 import Layout from "./components/Layout";
 import { ToastContainer } from "./components/Layout";
 import Login from "./pages/Login";
@@ -46,6 +47,7 @@ export default function App() {
   }, []);
 
   return (
+    <LangProvider>
     <AuthContext.Provider value={{ user, login, logout }}>
       <BrowserRouter>
         <Routes>
@@ -113,5 +115,6 @@ export default function App() {
         </Routes>
       </BrowserRouter>
     </AuthContext.Provider>
+    </LangProvider>
   );
 }

@@ -15,7 +15,7 @@ from sqlmodel import Session, select
 from app.core.security import hash_password
 from app.models.clinic_settings import ClinicSettings
 from app.models.department import Department
-from app.models.enums import UserRole, VisitSource, VisitStatus
+from app.models.enums import PatientType, UserRole, VisitSource, VisitStatus
 from app.models.patient import Patient
 from app.models.provider import Provider
 from app.models.queue_event import QueueEvent
@@ -292,13 +292,13 @@ def _seed_providers(session: Session, departments: dict[str, Department]) -> dic
 
 
 def _seed_slots(
-    session: Session, providers: dict[str, Provider], now: datetime, default_overbook_limit: int
+    session: Session, providers: dict[str, Provider], now: datetime, settings: ClinicSettings
 ) -> int:
     total = 0
     for provider in providers.values():
         for day_offset in (0, 1):
             created = ensure_slots_for_date(
-                session, provider, (now + timedelta(days=day_offset)).date(), default_overbook_limit
+                session, provider, (now + timedelta(days=day_offset)).date(), settings
             )
             total += len(created)
     return total
@@ -310,7 +310,12 @@ def _seed_patients(session: Session) -> list[Patient]:
         first = PATIENT_FIRST_NAMES[i % len(PATIENT_FIRST_NAMES)]
         last = PATIENT_LAST_NAMES[(i * 7) % len(PATIENT_LAST_NAMES)]
         phone = f"9{700000000 + i:09d}"
-        patient = Patient(full_name=f"{first} {last}", phone=phone, is_simulated=True)
+        # patients[0] is the demo OUT-patient login ("patient"); patients[1] is
+        # the demo IN-patient login ("patient_in") — see _seed_users below.
+        patient_type = PatientType.IN if i == 1 else PatientType.OUT
+        patient = Patient(
+            full_name=f"{first} {last}", phone=phone, patient_type=patient_type, is_simulated=True
+        )
         session.add(patient)
         patients.append(patient)
     session.commit()
@@ -319,7 +324,12 @@ def _seed_patients(session: Session) -> list[Patient]:
     return patients
 
 
-def _seed_users(session: Session, providers: dict[str, Provider], demo_patient: Patient) -> int:
+def _seed_users(
+    session: Session,
+    providers: dict[str, Provider],
+    demo_patient: Patient,
+    demo_in_patient: Patient,
+) -> int:
     password_hash = hash_password(DEMO_PASSWORD)
     users = [
         User(username="admin", password_hash=password_hash, role=UserRole.ADMIN),
@@ -329,6 +339,12 @@ def _seed_users(session: Session, providers: dict[str, Provider], demo_patient: 
             password_hash=password_hash,
             role=UserRole.PATIENT,
             patient_id=demo_patient.id,
+        ),
+        User(
+            username="patient_in",
+            password_hash=password_hash,
+            role=UserRole.PATIENT,
+            patient_id=demo_in_patient.id,
         ),
     ]
     for key, provider in providers.items():
@@ -447,9 +463,11 @@ def seed(session: Session, reset: bool = False, scenario: str = "default") -> Se
     departments = _seed_departments(session)
     services = _seed_services(session, departments)
     providers = _seed_providers(session, departments)
-    slot_count = _seed_slots(session, providers, now, settings.default_overbook_limit)
+    slot_count = _seed_slots(session, providers, now, settings)
     patients = _seed_patients(session)
-    user_count = _seed_users(session, providers, demo_patient=patients[0])
+    user_count = _seed_users(
+        session, providers, demo_patient=patients[0], demo_in_patient=patients[1]
+    )
     if scenario == "demo":
         visit_count = _seed_demo_visits(session, providers, services, patients, now)
     else:

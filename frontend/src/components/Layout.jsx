@@ -5,6 +5,7 @@ import { useSimClock } from "../hooks/useQueueStore";
 import { useToasts } from "../hooks/useQueueStore";
 import { LiveIndicator } from "./shared";
 import { formatTime } from "../lib/utils";
+import { useLang } from "../lib/i18n";
 import ChatAssistant from "./ChatAssistant";
 import { motion, useReducedMotion } from "framer-motion";
 import {
@@ -26,29 +27,43 @@ import {
 
 const NAV_ITEMS = {
   patient: [
-    { to: "/patient/dashboard", label: "Dashboard", icon: Home },
-    { to: "/patient/book", label: "Book Appointment", icon: CalendarPlus },
-    { to: "/patient/visits", label: "My Visits", icon: ClipboardList },
+    { to: "/patient/dashboard", labelKey: "dashboard", icon: Home },
+    { to: "/patient/book", labelKey: "book_appointment", icon: CalendarPlus },
+    { to: "/patient/visits", labelKey: "my_visits", icon: ClipboardList },
   ],
   receptionist: [
-    { to: "/reception/queue", label: "Queue Board", icon: LayoutDashboard },
-    { to: "/reception/walkin", label: "Walk-in", icon: UserPlus },
-    { to: "/reception/appointments", label: "Appointments", icon: CalendarPlus },
+    { to: "/reception/queue", labelKey: "queue_board", icon: LayoutDashboard },
+    { to: "/reception/walkin", labelKey: "walk_in", icon: UserPlus },
+    { to: "/reception/appointments", labelKey: "appointments", icon: CalendarPlus },
   ],
   provider: [
-    { to: "/provider/queue", label: "My Queue", icon: Stethoscope },
+    { to: "/provider/queue", labelKey: "my_queue", icon: Stethoscope },
   ],
   admin: [
-    { to: "/admin/overview", label: "Overview", icon: BarChart3 },
-    { to: "/admin/queue", label: "Queue Board", icon: LayoutDashboard },
-    { to: "/admin/settings", label: "Settings", icon: Settings },
-    { to: "/admin/providers", label: "Providers", icon: UserCog },
-    { to: "/admin/simulator", label: "Simulator", icon: PlayCircle },
+    { to: "/admin/overview", labelKey: "overview", icon: BarChart3 },
+    { to: "/admin/queue", labelKey: "queue_board", icon: LayoutDashboard },
+    { to: "/admin/settings", labelKey: "settings", icon: Settings },
+    { to: "/admin/providers", labelKey: "providers", icon: UserCog },
+    { to: "/admin/simulator", labelKey: "simulator", icon: PlayCircle },
   ],
 };
 
+function LangToggle() {
+  const { lang, setLang } = useLang();
+  return (
+    <button
+      onClick={() => setLang(lang === "en" ? "ta" : "en")}
+      className="px-2 py-1 rounded-full border border-hairline text-[11px] font-bold text-ink-muted hover:text-brand-700 hover:border-brand-500 transition-colors cursor-pointer"
+      title="Switch language / மொழி மாற்று"
+    >
+      {lang === "en" ? "தமிழ்" : "EN"}
+    </button>
+  );
+}
+
 function FloatingNavBar() {
   const { user, logout } = useAuth();
+  const { t } = useLang();
   const { now } = useSimClock();
   const navigate = useNavigate();
   const location = useLocation();
@@ -136,7 +151,7 @@ function FloatingNavBar() {
                     isActive ? "text-white" : "text-ink-muted hover:text-ink"
                   }`}
                 >
-                  {item.label}
+                  {t(item.labelKey)}
                 </span>
               </NavLink>
             );
@@ -145,7 +160,9 @@ function FloatingNavBar() {
 
         {/* Right: Clock Widget, User Pill, Logout / Hamburger */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-          
+
+          <LangToggle />
+
           {/* Simulated Clock Widget (Visible on all breakpoints, responsive text) */}
           <div className="flex items-center gap-1.5 px-2 sm:px-3 py-1 border border-dashed border-ink-muted/30 rounded-full bg-canvas text-xs font-mono font-medium text-ink">
             <Clock size={13} className="text-ink-muted shrink-0" />
@@ -172,7 +189,7 @@ function FloatingNavBar() {
             title="Log out"
           >
             <LogOut size={14} />
-            <span className="hidden lg:inline">Logout</span>
+            <span className="hidden lg:inline">{t("logout")}</span>
           </button>
 
           {/* Mobile Hamburger Button (<768px) */}
@@ -241,7 +258,7 @@ function FloatingNavBar() {
                     }
                   >
                     <item.icon size={18} />
-                    <span>{item.label}</span>
+                    <span>{t(item.labelKey)}</span>
                   </NavLink>
                 ))}
               </nav>

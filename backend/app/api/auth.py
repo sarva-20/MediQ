@@ -30,12 +30,14 @@ def login(body: LoginRequest, session: Session = Depends(get_session)) -> LoginR
     if user is None or not user.is_active or not password_ok:
         raise unauthorized("invalid_credentials", INVALID_CREDENTIALS_MESSAGE)
 
+    patient = session.get(Patient, user.patient_id) if user.patient_id else None
     return LoginResponse(
         access_token=create_access_token(user.id),
         role=user.role,
         user_id=user.id,
         provider_id=user.provider_id,
         patient_id=user.patient_id,
+        patient_type=patient.patient_type if patient else None,
     )
 
 
@@ -65,6 +67,7 @@ def register(body: RegisterRequest, session: Session = Depends(get_session)) -> 
         user_id=user.id,
         provider_id=user.provider_id,
         patient_id=user.patient_id,
+        patient_type=patient.patient_type,
     )
 
 

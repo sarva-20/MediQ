@@ -9,7 +9,7 @@ from sqlmodel import Session, select
 
 from app.core import clock
 from app.models.department import Department
-from app.models.enums import QueueEventType, VisitSource, VisitStatus
+from app.models.enums import PatientType, QueueEventType, VisitSource, VisitStatus
 from app.models.patient import Patient
 from app.models.provider import Provider
 from app.models.queue_event import QueueEvent
@@ -18,9 +18,26 @@ from app.models.slot import Slot
 from app.models.user import User
 from app.models.visit import Visit
 from app.services import queue_service
-from app.services.errors import ConflictError, NotFoundError
+from app.services.errors import BusinessValidationError, ConflictError, NotFoundError
 from app.services.slot_service import effective_overbook_limit
 from app.services.tokens import create_visit_with_token
+
+
+def _check_booking_window(slot: Slot, patient: Patient, settings) -> None:
+    """IN-patients and OUT-patients book against separate time-of-day windows
+    (ClinicSettings.in_patient_window_*/out_patient_window_*) — this only
+    gates which slot *times* a patient type may take, not when the booking
+    call itself happens."""
+    slot_clock = slot.start_at.time()
+    if patient.patient_type == PatientType.IN:
+        start, end = settings.in_patient_window_start, settings.in_patient_window_end
+    else:
+        start, end = settings.out_patient_window_start, settings.out_patient_window_end
+    if not (start <= slot_clock < end):
+        raise BusinessValidationError(
+            f"{patient.patient_type.value}-patients may only book slots between "
+            f"{start.strftime('%H:%M')} and {end.strftime('%H:%M')}."
+        )
 
 
 def create_appointment(
@@ -47,6 +64,9 @@ def create_appointment(
     if slot.end_at <= now:
         raise ConflictError("This slot has already ended.")
 
+    settings = queue_service.get_settings(session)
+    _check_booking_window(slot, patient, settings)
+
     overlap = session.exec(
         select(Visit)
         .join(Slot, Slot.id == Visit.slot_id)
@@ -60,7 +80,6 @@ def create_appointment(
     if overlap is not None:
         raise ConflictError("This patient already has an active visit during this time.")
 
-    settings = queue_service.get_settings(session)
     overbook = effective_overbook_limit(provider, settings.default_overbook_limit)
     effective_capacity = slot.capacity + overbook
 

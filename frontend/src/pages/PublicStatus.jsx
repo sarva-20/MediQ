@@ -1,24 +1,73 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useStoreRefresh, useSimClock } from '../hooks/useQueueStore';
-import { store, getVisitByToken, getProviderNowServing } from '../mocks/store';
+import { store, getVisitByToken, getProviderNowServing, fetchPublicStatus } from '../mocks/store';
+import { USE_MOCKS } from '../api/client';
 import { formatTime, formatWaitMinutes } from '../lib/utils';
 import { TokenDisplay, StatusPill, LiveIndicator } from '../components/shared';
 import { Clock, MapPin, Stethoscope, ArrowLeft, Users, AlertTriangle } from 'lucide-react';
 
+// Real mode: PublicStatusOut shape (department_code, provider_name, room_label,
+// status, position, patients_ahead, now_serving_token, estimated_wait_min,
+// eta_reason) mapped onto the same fields this page already reads.
+function mapPublicStatus(tokenNo, s) {
+  return {
+    token: tokenNo,
+    status: s.status.replace(/_/g, '-'),
+    position: s.position || 1,
+    estimatedWait: s.estimated_wait_min,
+    waitReason: s.eta_reason,
+    delay: null, // not exposed by the public status endpoint
+    serviceName: '',
+    serviceDuration: null,
+    patient: '',
+    _provider: { name: s.provider_name, room: s.room_label },
+    _nowServingToken: s.now_serving_token,
+  };
+}
+
 export default function PublicStatus() {
   const { tokenNo } = useParams();
-  
-  // Re-render when store updates
+
+  // Re-render when store updates (mock mode only — real mode polls itself below)
   useStoreRefresh();
-  
-  // Get current sim time
   const { now: currentTime } = useSimClock();
-  
-  // Look up visit by token
-  const visit = getVisitByToken(tokenNo);
-  const provider = visit ? store.providers.find(p => p.id === visit.providerId) : null;
-  const nowServing = provider ? getProviderNowServing(provider.id) : null;
+
+  const [realVisit, setRealVisit] = useState(undefined); // undefined = loading
+  const [realProvider, setRealProvider] = useState(null);
+  const [realNowServing, setRealNowServing] = useState(null);
+
+  useEffect(() => {
+    if (USE_MOCKS) return;
+    let cancelled = false;
+    const poll = () => {
+      fetchPublicStatus(tokenNo)
+        .then((s) => {
+          if (cancelled) return;
+          setRealVisit(mapPublicStatus(tokenNo, s));
+          setRealProvider(s ? { name: s.provider_name, room: s.room_label } : null);
+          setRealNowServing(s?.now_serving_token ? { token: s.now_serving_token, patient: '' } : null);
+        })
+        .catch(() => {
+          if (!cancelled) setRealVisit(null);
+        });
+    };
+    poll();
+    const interval = setInterval(poll, 4000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [tokenNo]);
+
+  const visit = USE_MOCKS ? getVisitByToken(tokenNo) : realVisit;
+  const provider = USE_MOCKS ? (visit ? store.providers.find(p => p.id === visit.providerId) : null) : realProvider;
+  const nowServing = USE_MOCKS ? (provider ? getProviderNowServing(provider.id) : null) : realNowServing;
+
+  if (visit === undefined) {
+    return (
+      <div className="min-h-screen bg-canvas flex items-center justify-center">
+        <span className="text-sm text-ink-muted">Loading…</span>
+      </div>
+    );
+  }
 
   if (!visit) {
     return (
@@ -213,8 +262,8 @@ export default function PublicStatus() {
 
       {/* Footer Info */}
       <footer className="w-full max-w-2xl flex items-center justify-between text-[11px] text-ink-muted py-2 border-t border-hairline">
-        <span>Patient: {visit.patient}</span>
-        <span>Service: {visit.serviceName} ({visit.serviceDuration} min)</span>
+        {visit.patient ? <span>Patient: {visit.patient}</span> : <span />}
+        {visit.serviceName ? <span>Service: {visit.serviceName} ({visit.serviceDuration} min)</span> : <span />}
         <span>MediQ Queue Departure Engine</span>
       </footer>
     </div>

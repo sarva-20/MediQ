@@ -9,11 +9,18 @@ from app.core.db import get_session
 from app.models.department import Department
 from app.models.provider import Provider
 from app.models.service import Service
+from app.schemas.booking_windows import BookingWindowsOut
 from app.schemas.catalog import DepartmentOut, ProviderListOut, ProviderOut, ServiceOut, SlotOut
 from app.services import queue_service
 from app.services.slot_service import effective_overbook_limit, ensure_slots_for_date
 
 router = APIRouter(tags=["catalog"])
+
+
+@router.get("/booking-windows", response_model=BookingWindowsOut)
+def get_booking_windows(session: Session = Depends(get_session)) -> BookingWindowsOut:
+    settings = queue_service.get_settings(session)
+    return BookingWindowsOut.model_validate(settings)
 
 
 @router.get("/departments", response_model=list[DepartmentOut])
@@ -93,7 +100,7 @@ def list_provider_slots(
         raise not_found("Provider not found.")
 
     settings = queue_service.get_settings(session)
-    slots = ensure_slots_for_date(session, provider, date, settings.default_overbook_limit)
+    slots = ensure_slots_for_date(session, provider, date, settings)
     overbook = effective_overbook_limit(provider, settings.default_overbook_limit)
     now = clock.now(session)
 

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useStoreRefresh, useSimClock, addToast } from '../../hooks/useQueueStore';
+import { useLang } from '../../lib/i18n';
 import { 
   advanceClock, 
   freezeClock, 
@@ -26,33 +27,50 @@ import {
 
 export default function Simulator() {
   useStoreRefresh();
+  const { t } = useLang();
   const { now: currentTime, frozen } = useSimClock();
   const metrics = getMetrics();
   const recentEvents = store.eventLog.slice(0, 6);
 
-  const handleAdvance = (mins) => {
-    advanceClock(mins);
-    addToast(`Fast-forwarded simulation clock by +${mins} minutes`);
-  };
-
-  const handleToggleFreeze = () => {
-    if (frozen) {
-      resumeClock();
-      addToast('Simulation clock resumed');
-    } else {
-      freezeClock();
-      addToast('Simulation clock paused');
+  const handleAdvance = async (mins) => {
+    try {
+      await advanceClock(mins);
+      addToast(`Fast-forwarded simulation clock by +${mins} minutes`);
+    } catch (err) {
+      addToast(err.message || 'Failed to advance clock', 'error');
     }
   };
 
-  const handleReset = () => {
-    resetClock();
-    addToast('Simulation clock reset to wall time');
+  const handleToggleFreeze = async () => {
+    try {
+      if (frozen) {
+        await resumeClock();
+        addToast('Simulation clock resumed');
+      } else {
+        await freezeClock();
+        addToast('Simulation clock paused');
+      }
+    } catch (err) {
+      addToast(err.message || 'Failed to update clock', 'error');
+    }
   };
 
-  const handleReseed = () => {
-    seedData();
-    addToast('Full demo dataset freshly reseeded');
+  const handleReset = async () => {
+    try {
+      await resetClock();
+      addToast('Simulation clock reset to wall time');
+    } catch (err) {
+      addToast(err.message || 'Failed to reset clock', 'error');
+    }
+  };
+
+  const handleReseed = async () => {
+    try {
+      await seedData();
+      addToast('Full demo dataset freshly reseeded');
+    } catch (err) {
+      addToast(err.message || 'Failed to reseed data', 'error');
+    }
   };
 
   return (
@@ -60,7 +78,7 @@ export default function Simulator() {
       {/* Title */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-ink tracking-tight">Interactive Simulation Console</h1>
+          <h1 className="text-2xl font-bold text-ink tracking-tight">{t('simulator_title')}</h1>
           <p className="text-sm text-ink-muted mt-0.5">
             Advance time and watch ETAs, queues, and explainability strings cascade in real time.
           </p>

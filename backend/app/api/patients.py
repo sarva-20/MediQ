@@ -21,7 +21,12 @@ def create_patient(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_staff),
 ) -> PatientOut:
-    patient = Patient(full_name=body.full_name, phone=body.phone, is_simulated=True)
+    patient = Patient(
+        full_name=body.full_name,
+        phone=body.phone,
+        patient_type=body.patient_type,
+        is_simulated=True,
+    )
     session.add(patient)
     session.commit()
     session.refresh(patient)

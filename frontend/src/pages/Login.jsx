@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../hooks/useQueueStore';
+import { useAuth, addToast } from '../hooks/useQueueStore';
 import { ROLES, DEMO_ACCOUNTS } from '../lib/utils';
+import { apiLogin, refreshRealCacheNow } from '../mocks/store';
+import { USE_MOCKS } from '../api/client';
+import { DEMO_LOGIN_CREDENTIALS } from '../api/config';
+import { useLang } from '../lib/i18n';
 import { 
   User, 
   UserCog, 
@@ -21,25 +25,42 @@ export default function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const { login } = useAuth();
+  const { t } = useLang();
   const navigate = useNavigate();
 
-  const handleManualLogin = (e) => {
+  const handleManualLogin = async (e) => {
     e.preventDefault();
-    const role = 'patient';
-    const user = { name: username.trim() || 'Arjun Mehta', role };
-    login(user);
-    navigate(ROLES[role]?.home || '/patient/dashboard');
+    if (USE_MOCKS) {
+      const role = 'patient';
+      login({ name: username.trim() || 'Arjun Mehta', role });
+      navigate(ROLES[role]?.home || '/patient/dashboard');
+      return;
+    }
+    try {
+      const session = await apiLogin(username.trim(), password);
+      login(session);
+      await refreshRealCacheNow();
+      navigate(ROLES[session.role]?.home || '/patient/dashboard');
+    } catch (err) {
+      addToast(err.message || 'Login failed', 'error');
+    }
   };
 
-  const handleDemoLogin = (account) => {
-    const user = { 
-      name: account.name, 
-      role: account.role, 
-      providerId: account.role === 'provider' ? 'p1' : undefined 
-    };
-    login(user);
-    const dest = ROLES[account.role]?.home || '/patient/dashboard';
-    navigate(dest);
+  const handleDemoLogin = async (account) => {
+    if (USE_MOCKS) {
+      login({ name: account.name, role: account.role, providerId: account.role === 'provider' ? 'p1' : undefined });
+      navigate(ROLES[account.role]?.home || '/patient/dashboard');
+      return;
+    }
+    try {
+      const creds = DEMO_LOGIN_CREDENTIALS[account.role];
+      const session = await apiLogin(creds.username, creds.password, { displayName: account.name });
+      login(session);
+      await refreshRealCacheNow();
+      navigate(ROLES[account.role]?.home || '/patient/dashboard');
+    } catch (err) {
+      addToast(err.message || 'Demo login failed', 'error');
+    }
   };
 
   const getRoleIcon = (role) => {
@@ -72,7 +93,7 @@ export default function Login() {
             className="flex items-center gap-1.5 text-xs font-semibold text-brand-100 hover:text-white transition-colors"
           >
             <ArrowLeft size={13} />
-            <span className="hidden sm:inline">Back to</span> Home
+            <span className="hidden sm:inline">{t('back_to_home')}</span>
           </Link>
         </div>
 
@@ -216,10 +237,10 @@ export default function Login() {
           <div>
             <span className="text-xs font-bold uppercase tracking-wider text-brand-700">Account Access</span>
             <h2 className="text-2xl sm:text-3xl font-bold text-ink tracking-tight mt-1">
-              Sign in to MediQ
+              {t('sign_in')} to MediQ
             </h2>
             <p className="text-xs sm:text-sm text-ink-muted mt-1 leading-relaxed">
-              Use one-click demo profiles for instant role simulation, or sign in with credentials.
+              {t('sign_in_subtitle')}
             </p>
           </div>
 
@@ -227,7 +248,7 @@ export default function Login() {
           <div className="card p-4 bg-surface border border-hairline rounded-xl shadow-card space-y-3">
             <div className="flex items-center justify-between pb-1 border-b border-hairline">
               <span className="text-xs font-bold uppercase tracking-wider text-accent-amber flex items-center gap-1.5">
-                <Sparkles size={13} className="text-accent-amber" /> One-Click Demo Access
+                <Sparkles size={13} className="text-accent-amber" /> {t('one_click_demo')}
               </span>
               <span className="text-[11px] text-ink-muted">Instant role switch</span>
             </div>
@@ -260,7 +281,7 @@ export default function Login() {
           <div className="relative flex items-center justify-center my-1">
             <div className="absolute border-t border-hairline w-full"></div>
             <div className="bg-canvas px-3 text-[11px] uppercase tracking-wider text-ink-muted relative z-10 font-medium">
-              or enter credentials
+              {t('or_enter_credentials')}
             </div>
           </div>
 
@@ -268,7 +289,7 @@ export default function Login() {
           <form onSubmit={handleManualLogin} className="space-y-3.5">
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-ink mb-1">
-                Username / Patient ID
+                {t('username_or_id')}
               </label>
               <input 
                 type="text" 
@@ -281,7 +302,7 @@ export default function Login() {
 
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-ink mb-1">
-                Password
+                {t('password')}
               </label>
               <input 
                 type="password" 
@@ -296,16 +317,16 @@ export default function Login() {
               type="submit" 
               className="w-full py-3 bg-accent-amber text-white text-sm font-semibold rounded-lg hover:bg-accent-amber/90 transition-colors cursor-pointer shadow-sm mt-1"
             >
-              Sign In to MediQ
+              {t('sign_in')} to MediQ
             </button>
           </form>
 
           {/* Bottom Links: Create Account & Home */}
           <div className="pt-3 border-t border-hairline flex flex-col sm:flex-row items-center justify-between text-xs text-ink-muted gap-2">
             <div>
-              Don't have an account?{' '}
+              {t('dont_have_account')}{' '}
               <Link to="/signup" className="font-bold text-accent-amber hover:underline">
-                Create account
+                {t('create_account')}
               </Link>
             </div>
             <Link to="/" className="text-ink-muted hover:text-brand-700 transition-colors">

@@ -5,6 +5,7 @@ import app.models (not an individual model module) first."""
 from app.models.clinic_settings import ClinicSettings
 from app.models.department import Department
 from app.models.patient import Patient
+from app.models.prescription import Prescription
 from app.models.provider import Provider
 from app.models.queue_event import QueueEvent
 from app.models.service import Service
@@ -18,6 +19,7 @@ __all__ = [
     "ClinicSettings",
     "Department",
     "Patient",
+    "Prescription",
     "Provider",
     "QueueEvent",
     "Service",

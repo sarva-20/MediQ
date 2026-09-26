@@ -5,6 +5,7 @@ import {
   store 
 } from '../../mocks/store';
 import { useAuth, useStoreRefresh, useSimClock } from '../../hooks/useQueueStore';
+import { useLang } from '../../lib/i18n';
 import { formatTime, formatDate, DEMO_PATIENT } from '../../lib/utils';
 import { 
   TokenDisplay, 
@@ -31,6 +32,7 @@ import {
 export default function PatientDashboard() {
   useStoreRefresh(); // Live pub/sub re-renders
   const { user } = useAuth();
+  const { t } = useLang();
   const { now: currentTime } = useSimClock();
   
   const patientName = user?.name || DEMO_PATIENT;
@@ -62,7 +64,7 @@ export default function PatientDashboard() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-ink tracking-tight">
-            Welcome back, {firstName}
+            {t('welcome_back')}, {firstName}
           </h1>
           <p className="text-sm text-ink-muted mt-1">
             Here's where things stand today. Track live appointments and queue tokens in real time.
@@ -73,7 +75,7 @@ export default function PatientDashboard() {
           to="/patient/book"
           className="inline-flex items-center gap-2 px-4 py-2.5 bg-accent-amber text-white rounded-xl text-xs sm:text-sm font-semibold hover:bg-accent-amber/90 transition-colors shadow-sm self-start sm:self-auto"
         >
-          <CalendarPlus size={16} /> Book New Visit
+          <CalendarPlus size={16} /> {t('book_new_visit')}
         </Link>
       </div>
 
@@ -122,7 +124,7 @@ export default function PatientDashboard() {
             </div>
           ) : (
             <div className="py-2 text-left">
-              <div className="text-sm font-semibold text-ink">None booked</div>
+              <div className="text-sm font-semibold text-ink">{t('none_booked')}</div>
               <p className="text-xs text-ink-muted mt-0.5">
                 You have no upcoming consultations scheduled. Book anytime.
               </p>
@@ -194,7 +196,7 @@ export default function PatientDashboard() {
               to="/patient/visits"
               className="text-accent-amber font-semibold hover:underline inline-flex items-center gap-1"
             >
-              View full visit history <ArrowRight size={12} />
+              {t('view_full_history')} <ArrowRight size={12} />
             </Link>
           </div>
         </div>
@@ -227,7 +229,7 @@ export default function PatientDashboard() {
       <div className="card overflow-hidden">
         <div className="p-4 sm:p-5 border-b border-hairline bg-surface flex items-center justify-between">
           <div>
-            <h2 className="text-base font-bold text-ink">Recent Visits & Activity</h2>
+            <h2 className="text-base font-bold text-ink">{t('recent_visits')}</h2>
             <p className="text-xs text-ink-muted">Recent appointments and clinical consultations</p>
           </div>
           <Link

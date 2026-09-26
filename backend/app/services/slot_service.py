@@ -9,12 +9,21 @@ from datetime import date as date_type
 
 from sqlmodel import Session, select
 
+from app.models.clinic_settings import ClinicSettings
 from app.models.provider import Provider
 from app.models.slot import Slot
 
 
+def _overlaps_lunch_break(
+    cursor_start: datetime, cursor_end: datetime, target_date, settings: ClinicSettings
+) -> bool:
+    break_start = datetime.combine(target_date, settings.lunch_break_start, tzinfo=UTC)
+    break_end = datetime.combine(target_date, settings.lunch_break_end, tzinfo=UTC)
+    return cursor_start < break_end and cursor_end > break_start
+
+
 def ensure_slots_for_date(
-    session: Session, provider: Provider, target_date: date_type, default_overbook_limit: int
+    session: Session, provider: Provider, target_date: date_type, settings: ClinicSettings
 ) -> list[Slot]:
     day_start = datetime.combine(target_date, time.min, tzinfo=UTC)
     day_end = day_start + timedelta(days=1)
@@ -39,14 +48,16 @@ def ensure_slots_for_date(
     created: list[Slot] = []
     cursor = shift_start
     while cursor + step <= shift_end:
-        slot = Slot(
-            provider_id=provider.id,
-            start_at=cursor,
-            end_at=cursor + step,
-            capacity=provider.slot_capacity,
-        )
-        session.add(slot)
-        created.append(slot)
+        cursor_end = cursor + step
+        if not _overlaps_lunch_break(cursor, cursor_end, target_date, settings):
+            slot = Slot(
+                provider_id=provider.id,
+                start_at=cursor,
+                end_at=cursor_end,
+                capacity=provider.slot_capacity,
+            )
+            session.add(slot)
+            created.append(slot)
         cursor += step
     session.commit()
     for slot in created:
