@@ -26,6 +26,7 @@ class VisitOut(BaseModel):
     completed_at: datetime | None
     delay_minutes: int
     delay_reason: str | None
+    is_overbooked: bool
     priority_flag: bool
     priority_reason: str | None
     priority_set_at: datetime | None

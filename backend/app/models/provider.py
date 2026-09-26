@@ -25,5 +25,7 @@ class Provider(SQLModel, table=True):
     shift_end: time
     slot_length_min: int
     slot_capacity: int = 1
-    overbook_limit: int = 0
+    # None falls back to ClinicSettings.default_overbook_limit at read/booking
+    # time — see app.services.booking_service.effective_overbook_limit.
+    overbook_limit: int | None = None
     created_at: datetime = Field(default_factory=utcnow)

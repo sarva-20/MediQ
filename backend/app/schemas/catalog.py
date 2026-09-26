@@ -1,11 +1,13 @@
 from datetime import datetime, time
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from app.models.enums import DepartmentKind, ProviderKind
 
 
 class DepartmentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     code: str
     name: str
@@ -13,6 +15,8 @@ class DepartmentOut(BaseModel):
 
 
 class ServiceOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     department_id: int
     name: str
@@ -22,6 +26,8 @@ class ServiceOut(BaseModel):
 
 
 class ProviderOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     department_id: int
     name: str
@@ -32,7 +38,7 @@ class ProviderOut(BaseModel):
     shift_end: time
     slot_length_min: int
     slot_capacity: int
-    overbook_limit: int
+    overbook_limit: int | None
 
 
 class SlotOut(BaseModel):
@@ -43,3 +49,5 @@ class SlotOut(BaseModel):
     capacity: int
     booked_count: int
     remaining: int
+    remaining_with_overbook: int
+    is_available: bool  # False once the slot has ended, relative to the simulated clock

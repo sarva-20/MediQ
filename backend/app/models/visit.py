@@ -38,6 +38,7 @@ class Visit(SQLModel, table=True):
 
     delay_minutes: int = 0
     delay_reason: str | None = None
+    is_overbooked: bool = False
 
     priority_flag: bool = False
     priority_reason: str | None = None

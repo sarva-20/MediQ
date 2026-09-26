@@ -59,6 +59,13 @@ def conflict(message: str) -> HTTPException:
     )
 
 
+def validation_error(message: str) -> HTTPException:
+    return HTTPException(
+        status_code=422,
+        detail={"error": {"code": "validation_error", "message": message, "details": None}},
+    )
+
+
 def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     session: Session = Depends(get_session),
@@ -127,3 +134,9 @@ def ensure_provider_scope(user: User, provider_id: int) -> None:
     """A provider may only view their own queue; receptionists/admins may view any."""
     if user.role is UserRole.PROVIDER and user.provider_id != provider_id:
         raise forbidden("You may only access your own provider's queue.")
+
+
+def ensure_patient_scope(user: User, patient_id: int) -> None:
+    """A patient may only book for themselves; staff are unrestricted."""
+    if user.role is UserRole.PATIENT and user.patient_id != patient_id:
+        raise forbidden("You may only book for yourself.")

@@ -1,9 +1,11 @@
-"""RBAC coverage per docs/api-contract.md. Booking/walk-in creation and the
-catalog/admin routers are still Module M3/M4/M9 501 placeholders — "may access"
-there just means the request cleared the role/object-level guard and reached
-the placeholder. Lifecycle, queue, and events are real (Module M6) — "may
-access" there means a genuine 2xx. "May not access" always means rejected
-(403) before the handler body ever runs, regardless of which case applies."""
+"""RBAC coverage per docs/api-contract.md. The Admin router is still a Module
+M9 501 placeholder — "may access" there just means the request cleared the
+role/object-level guard and reached the placeholder. Everything else (Auth,
+Lifecycle, Queue, Booking, Walk-ins, Catalog) is real (through Module M4) —
+"may access" there means the request cleared RBAC and reached real business
+logic, which may then 404/409/422 on bad data; that's a business outcome, not
+an RBAC one. "May not access" always means rejected (403) before the handler
+body ever runs, regardless of which case applies."""
 
 from fastapi.testclient import TestClient
 
@@ -13,21 +15,23 @@ from tests.helpers import auth_header
 
 def test_public_endpoint_requires_no_auth(client: TestClient) -> None:
     response = client.get("/api/departments")
-    assert response.status_code == 501
+    assert response.status_code == 200
 
 
 def test_patient_may_create_appointment(client: TestClient, auth_fixture: AuthFixture) -> None:
+    # Role/object-level guard clears; a bogus slot_id then 404s in the real
+    # booking logic — a business outcome, proving RBAC didn't block it.
     response = client.post(
         "/api/appointments",
         headers=auth_header(auth_fixture.patient_user.id),
         json={
             "patient_id": auth_fixture.patient.id,
-            "provider_id": 1,
-            "service_id": 1,
-            "slot_id": 1,
+            "provider_id": auth_fixture.provider.id,
+            "service_id": auth_fixture.visit.service_id,
+            "slot_id": 999999,
         },
     )
-    assert response.status_code == 501
+    assert response.status_code == 404
 
 
 def test_patient_may_not_access_admin_endpoint(
@@ -42,9 +46,14 @@ def test_receptionist_may_create_walk_in(client: TestClient, auth_fixture: AuthF
     response = client.post(
         "/api/walk-ins",
         headers=auth_header(auth_fixture.receptionist.id),
-        json={"patient_id": auth_fixture.patient.id, "department_code": "GM", "service_id": 1},
+        json={
+            "patient_id": auth_fixture.patient.id,
+            "department_id": auth_fixture.provider.department_id,
+            "service_id": auth_fixture.visit.service_id,
+            "provider_id": auth_fixture.provider.id,
+        },
     )
-    assert response.status_code == 501
+    assert response.status_code == 201
 
 
 def test_receptionist_may_not_access_admin_only_events(

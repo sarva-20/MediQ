@@ -3,12 +3,11 @@
 This is the contract to build the frontend against. Every endpoint below exists and
 appears in `/docs` (Swagger UI) with its real request/response schemas, and every
 endpoint enforces its documented role (and, where noted, object-level ownership).
-As of Module M6, **Auth, Lifecycle, Queue and status, Metrics and audit, and
-Simulation are fully implemented** — real data, real state transitions, real 409s.
-**Booking/walk-in creation, Catalog, and Admin are still `501 Not Implemented`**
-placeholders (a request that clears the auth/role check still gets a 501 there) —
-see `docs/requirements-traceability.md` for current status. The machine-readable
-version is `docs/openapi.json`, exported from the running app.
+As of Module M4, **everything below is fully implemented except Admin**, which is
+still a `501 Not Implemented` placeholder (a request that clears the auth/role
+check still gets a 501 there) — see `docs/requirements-traceability.md` for
+current status. The machine-readable version is `docs/openapi.json`, exported
+from the running app.
 
 Base URL: `http://localhost:8000/api` (local dev). All request/response bodies are
 JSON. All timestamps are ISO 8601, UTC (`...Z`); the frontend converts to
@@ -140,30 +139,44 @@ of active visits (in-service + waiting) for that provider.
 
 ## Catalog
 
-All Catalog endpoints are **501 — Module M3.**
+All **implemented** (Module M3). Department/provider/service reads are public
+(no login); the frontend needs them before a patient has even logged in.
 
 | Method | Path | Role | Notes |
 |---|---|---|---|
 | GET | `/api/departments` | Public | → `DepartmentOut[]` |
-| GET | `/api/departments/{department_id}/providers` | Public | → `ProviderOut[]` |
-| GET | `/api/providers/{provider_id}` | Public | → `ProviderOut` |
-| GET | `/api/services` | Public | → `ServiceOut[]` |
-| GET | `/api/providers/{provider_id}/slots?date=2026-09-26` | Public | → `SlotOut[]` (only future, non-full slots for booking UIs; admin views of all slots are out of scope here) |
+| GET | `/api/departments/{department_id}/providers` | Public | → `ProviderOut[]`, active only |
+| GET | `/api/providers/{provider_id}` | Public | → `ProviderOut`. `404 not_found` if unknown. |
+| GET | `/api/services?department_id=` | Public | → `ServiceOut[]`, active only. `department_id` filter is optional. |
+| GET | `/api/providers/{provider_id}/slots?date=2026-09-26` | Public | → `SlotOut[]`, generated on first request for that (provider, date) and reused after (see `docs/architecture.md` § Slot generation). |
 
 Example `SlotOut`:
 
 ```json
-{ "id": 101, "provider_id": 5, "start_at": "2026-09-26T09:00:00Z", "end_at": "2026-09-26T09:15:00Z", "capacity": 2, "booked_count": 1, "remaining": 1 }
+{
+  "id": 101, "provider_id": 5, "start_at": "2026-09-26T09:00:00Z", "end_at": "2026-09-26T09:15:00Z",
+  "capacity": 1, "booked_count": 1, "remaining": 0, "remaining_with_overbook": 1, "is_available": true
+}
 ```
+
+`capacity`/`remaining` are the provider's *base* `slot_capacity` only; `remaining_with_overbook`
+additionally counts the provider's (or clinic default) `overbook_limit` — see § Booking below
+for exactly how a booking is accepted into the base vs. overbook portion. `is_available` is
+`false` once `end_at` is in the past relative to the simulated clock — a booking UI should grey
+those out even if `remaining_with_overbook` is still positive.
 
 ## Booking
 
+All **implemented** (Module M3). Appointments always name a specific provider —
+there's no "any available provider" for a booked appointment; that auto-routing
+only exists for walk-ins (§ Walk-ins below), since a walk-in has no slot to anchor to.
+
 | Method | Path | Role | Notes |
 |---|---|---|---|
-| POST | `/api/appointments` | Patient, Receptionist | **501 — Module M3.** Body: `AppointmentCreate` → `VisitOut` (201). Admin is deliberately excluded — booking is a patient/front-desk action. |
-| GET | `/api/appointments` | Patient (own), Receptionist, Admin | **501 — Module M3.** Paginated `VisitOut` |
-| POST | `/api/appointments/{visit_id}/cancel` | Patient (own), Receptionist, Admin | **Implemented.** `BOOKED`/`CHECKED_IN` → `CANCELLED`; releases the slot's `booked_count` if the slot is in the future. `409 conflict` from any other status. → `VisitOut` |
-| POST | `/api/visits/{visit_id}/check-in` | Receptionist, Admin | **Implemented.** `BOOKED` → `CHECKED_IN` only; `409 conflict` otherwise. → `VisitOut` |
+| POST | `/api/appointments` | Patient, Receptionist | Body: `AppointmentCreate` → `VisitOut` (201). Admin is deliberately excluded — booking is a patient/front-desk action. `404` if patient/provider/service/slot don't exist; `409` if the service isn't offered by the provider's department, the slot belongs to a different provider, the slot has ended, the slot is full, or the patient already has an active visit overlapping that time. |
+| GET | `/api/appointments` | Patient (own), Receptionist, Admin | Query params: `page`, `page_size`, `provider_id`, `department_id`, `date`, `status` — all optional. A patient's own visits regardless of filters; staff see everyone's, filtered as requested. Paginated `VisitOut`. |
+| POST | `/api/appointments/{visit_id}/cancel` | Patient (own), Receptionist, Admin | `BOOKED`/`CHECKED_IN` → `CANCELLED`; releases the slot's `booked_count` if the slot is in the future. `409 conflict` from any other status. → `VisitOut` |
+| POST | `/api/visits/{visit_id}/check-in` | Receptionist, Admin | `BOOKED` → `CHECKED_IN` only; `409 conflict` otherwise. → `VisitOut` |
 
 Example `AppointmentCreate`:
 
@@ -179,28 +192,85 @@ Example `VisitOut`:
   "source": "appointment", "token_no": "GM-A013", "status": "booked",
   "scheduled_start": "2026-09-26T09:00:00Z", "checked_in_at": null,
   "started_at": null, "completed_at": null, "delay_minutes": 0, "delay_reason": null,
-  "priority_flag": false, "priority_reason": null, "priority_set_at": null,
+  "is_overbooked": false, "priority_flag": false, "priority_reason": null, "priority_set_at": null,
   "estimated_start": "2026-09-26T09:12:00Z", "estimated_wait_min": 12, "eta_reason": "Next in line",
   "created_at": "2026-09-26T05:00:00Z"
 }
 ```
 
+`is_overbooked` is `true` when this booking was accepted past the slot's base
+`capacity` (into the `overbook_limit` headroom) — see `docs/architecture.md`
+§ Booking and capacity for exactly how capacity, overbooking, and the
+race-safe token numbering (`token_no`) work.
+
 ## Walk-ins
+
+**Implemented** (Module M4). Unlike an appointment, a walk-in may omit
+`provider_id` entirely — "any available provider in the department" is
+specifically a walk-in concept (see § Load-balanced routing in
+`docs/architecture.md`).
 
 | Method | Path | Role | Notes |
 |---|---|---|---|
-| POST | `/api/walk-ins` | Receptionist | **501 — Module M4.** Body: `WalkInCreate` → `VisitOut` (201) |
+| POST | `/api/walk-ins` | Receptionist, Admin | Body: `WalkInCreate` → `WalkInOut` (201) |
 
-Example `WalkInCreate` (auto-routed — no `provider_id`):
+Example `WalkInCreate` — exactly one of `patient_id` or (`full_name` + `phone`) is required
+(`422` if both or neither are given); `provider_id` is optional:
 
 ```json
-{ "patient_id": 12, "department_code": "RAD", "service_id": 7 }
+{ "patient_id": 12, "department_id": 4, "service_id": 7 }
+```
+```json
+{ "full_name": "Ravi Kumar", "phone": "9876543210", "department_id": 4, "service_id": 7, "provider_id": 5 }
+```
+
+If `provider_id` is omitted and `ClinicSettings.walkin_routing_enabled` is
+true (the default), the walk-in is auto-routed — see
+`docs/architecture.md` § Load-balanced routing. If routing is disabled and no
+`provider_id` is given, this is a `422 validation_error`, not a silent pick.
+
+Example `WalkInOut` response — deliberately not `VisitOut`; a walk-in confirmation
+is a small receipt, not the full record:
+
+```json
+{
+  "token_no": "RAD-W005",
+  "provider_name": "Dr. Priya Rao",
+  "room_label": "RAD-2",
+  "estimated_wait_min": 12,
+  "eta_reason": "Next in line",
+  "queue_position": 1,
+  "patients_ahead": 0,
+  "status_path": "/api/status/RAD-W005",
+  "routing_explanation": "Routed to Dr. Priya Rao: shortest wait (12 min vs 27 min)"
+}
+```
+
+`routing_explanation` is present whether or not routing actually ran — an
+explicit `provider_id` still gets an explanation ("requested by receptionist"),
+and a department with only one active provider gets "only active provider in
+department" rather than a wait comparison with nothing to compare against.
+The routing decision (or lack thereof) is also stored in the `walk_in`
+`QueueEvent`'s payload for audit (`GET /api/events`).
+
+## Patients
+
+**Implemented** (Module M3). A lightweight directory for staff to find or
+register a patient before booking/walking them in — not a clinical record.
+
+| Method | Path | Role | Notes |
+|---|---|---|---|
+| POST | `/api/patients` | Receptionist, Admin | Body: `{"full_name", "phone"}` → `PatientOut` (201). Always `is_simulated: true` — see § Data minimization. |
+| GET | `/api/patients?q=` | Receptionist, Admin | `q` matches full name or phone (substring, case-insensitive); omit for the first 20 patients. → `PatientOut[]`, capped at 20. |
+
+Example `PatientOut`:
+
+```json
+{ "id": 12, "full_name": "Ravi Kumar", "phone": "9876543210", "is_simulated": true, "created_at": "2026-09-26T05:00:00Z" }
 ```
 
 ## Queue and status
 
-| Method | Path | Role | Notes |
-|---|---|---|---|
 All three are **implemented** (Module M6) — real placements from `app.engine`, recomputed fresh on every read.
 
 | Method | Path | Role | Notes |

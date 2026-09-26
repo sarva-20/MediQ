@@ -5,6 +5,7 @@ after every state change; app.api.sim calls recompute_all() after the clock
 advances so no-shows apply and estimates update without a lifecycle event."""
 
 from dataclasses import dataclass
+from datetime import datetime
 
 from sqlmodel import Session, select
 
@@ -53,7 +54,7 @@ def get_settings(session: Session) -> ClinicSettings:
     return settings
 
 
-def _duration_input(session: Session, provider_id: int, service: Service) -> ServiceDurationInput:
+def duration_input(session: Session, provider_id: int, service: Service) -> ServiceDurationInput:
     stat = session.get(ServiceDurationStat, (provider_id, service.id))
     return ServiceDurationInput(
         default_duration_min=service.default_duration_min,
@@ -85,12 +86,18 @@ def delayed_count(snapshot: QueueSnapshot) -> int:
     return waiting_delayed + (1 if in_service_delayed else 0)
 
 
-def recompute_provider(session: Session, provider_id: int) -> QueueSnapshot:
-    provider = session.get(Provider, provider_id)
-    if provider is None:
-        raise ValueError(f"Unknown provider_id={provider_id}")
-
-    now = clock.now(session)
+def build_engine_input(
+    session: Session,
+    provider_id: int,
+    now: datetime | None = None,
+    extra_waiting: list[WaitingVisit] | None = None,
+) -> tuple[EngineInput, list[Visit], Visit | None]:
+    """Loads a provider's current state and shapes it into an EngineInput.
+    `extra_waiting` lets a caller (e.g. walk-in routing) ask "what would the
+    engine say if this hypothetical visit were also in the queue?" without
+    writing anything — `run_engine()` is pure, so nothing is persisted here
+    either; only `recompute_provider` below writes the result back."""
+    now = now if now is not None else clock.now(session)
     settings = get_settings(session)
 
     in_service_visit = session.exec(
@@ -120,9 +127,7 @@ def recompute_provider(session: Session, provider_id: int) -> QueueSnapshot:
             id=in_service_visit.id,
             started_at=in_service_visit.started_at,
             delay_minutes=in_service_visit.delay_minutes,
-            duration=_duration_input(
-                session, provider_id, service_for(in_service_visit.service_id)
-            ),
+            duration=duration_input(session, provider_id, service_for(in_service_visit.service_id)),
         )
 
     engine_waiting = [
@@ -137,19 +142,28 @@ def recompute_provider(session: Session, provider_id: int) -> QueueSnapshot:
             delay_minutes=v.delay_minutes,
             delay_reason=v.delay_reason,
             previous_estimated_start=v.estimated_start,
-            duration=_duration_input(session, provider_id, service_for(v.service_id)),
+            duration=duration_input(session, provider_id, service_for(v.service_id)),
         )
         for v in waiting_visits
-    ]
+    ] + list(extra_waiting or [])
 
-    result = run_engine(
-        EngineInput(
-            now=now,
-            settings=EngineSettings(noshow_grace_minutes=settings.noshow_grace_minutes),
-            in_service=engine_in_service,
-            waiting=engine_waiting,
-        )
+    engine_input = EngineInput(
+        now=now,
+        settings=EngineSettings(noshow_grace_minutes=settings.noshow_grace_minutes),
+        in_service=engine_in_service,
+        waiting=engine_waiting,
     )
+    return engine_input, waiting_visits, in_service_visit
+
+
+def recompute_provider(session: Session, provider_id: int) -> QueueSnapshot:
+    provider = session.get(Provider, provider_id)
+    if provider is None:
+        raise ValueError(f"Unknown provider_id={provider_id}")
+
+    engine_input, waiting_visits, in_service_visit = build_engine_input(session, provider_id)
+    now = engine_input.now
+    result = run_engine(engine_input)
 
     visits_by_id = {v.id: v for v in waiting_visits}
 

@@ -11,17 +11,18 @@ UI element. Status values:
 - **Planned** — nothing built yet.
 
 See `docs/api-contract.md` for full request/response examples and
-`docs/architecture.md` for the ER diagram, event-driven design, and § 8 for the
-queue engine's placement rules and ETA reason codes.
+`docs/architecture.md` for the ER diagram, event-driven design, § 8 for the
+queue engine's placement rules and ETA reason codes, § 9 for booking/capacity/
+token numbering, and § 10 for walk-in load-balanced routing.
 
 ## Required Features
 
 | Requirement | Module | Endpoint(s) | UI Element | Status |
 |---|---|---|---|---|
-| Appointment booking | `models.Visit/Slot`, `services/booking` (M3) | `POST /api/appointments` | Receptionist booking form | Data model: Implemented · Endpoint: Scaffolded |
-| Provider / service selection | `models.Provider/Service` | `GET /api/departments/{id}/providers`, `GET /api/services` | Department/provider picker | Data model: Implemented · Endpoint: Scaffolded |
-| Slot capacity | `models.Slot`, `engine` | `GET /api/providers/{id}/slots` | Admin slot configuration screen | Data model: Implemented · Read endpoint: Scaffolded (M3) · Release-on-cancel: Implemented |
-| Walk-in token generation | `models.Visit`, `services/walkin` (M4) | `POST /api/walk-ins` | Walk-in kiosk / receptionist action | Data model: Implemented · Endpoint: Scaffolded |
+| Appointment booking | `models.Visit/Slot`, `services/booking_service.py` (M3) | `POST /api/appointments`, `GET /api/appointments` | Receptionist booking form | **Implemented**, incl. capacity/overbooking, overlap check, atomic booking, `409`/`404` on bad input |
+| Provider / service selection | `models.Provider/Service`, `services/queue_service.py` | `GET /api/departments/{id}/providers`, `GET /api/services?department_id=` | Department/provider picker | **Implemented** |
+| Slot capacity | `models.Slot`, `services/slot_service.py`, `app.engine` | `GET /api/providers/{id}/slots` | Admin slot configuration screen | **Implemented** — idempotent generation, base + overbook capacity, release-on-cancel |
+| Walk-in token generation | `models.Visit`, `services/tokens.py`, `services/walkin_service.py` (M4) | `POST /api/walk-ins` | Walk-in kiosk / receptionist action | **Implemented**, incl. race-safe per-day numbering |
 | Queue status | `app.engine`, `services/queue_service.py` | `GET /api/queue/providers/{id}` | Staff dashboard queue list | **Implemented** |
 | Estimated wait time | `app.engine` (placement + EWMA duration learning) | `GET /api/queue/providers/{id}`, `GET /api/status/{token_no}` | Patient status page, dashboard | **Implemented** |
 | Completion / cancellation updates | `services/lifecycle_service.py` | `POST /api/appointments/{id}/cancel`, `POST /api/visits/{id}/complete` | Provider "complete" action, receptionist "cancel" action | **Implemented**, incl. `409` on illegal transitions |
@@ -33,9 +34,9 @@ queue engine's placement rules and ETA reason codes.
 
 | Requirement | Module | Endpoint(s) | UI Element | Status |
 |---|---|---|---|---|
-| Overbooking limits | `models.Provider.overbook_limit`, `app.engine` (anchored appointments queue sequentially) | `POST /api/admin/providers`, `PUT /api/admin/providers/{id}` | Admin configuration screen | Data model + engine handling: Implemented · Admin endpoint: Scaffolded (M9) |
+| Overbooking limits | `models.Provider.overbook_limit` (nullable, falls back to `ClinicSettings.default_overbook_limit`), `services/booking_service.py` (atomic capacity claim), `Visit.is_overbooked` | `POST /api/appointments`, `GET /api/providers/{id}/slots` (`remaining_with_overbook`) | Booking UI overbook indicator | **Implemented**. Admin endpoint to *change* the limit: Scaffolded (M9) |
 | Predicted service duration | `models.Service/ServiceDurationStat`, `app.engine.durations` | `PUT /api/admin/services/{id}` | Admin configuration screen | EWMA learning: **Implemented** · Admin endpoint: Scaffolded (M9) |
-| Queue-load balancing across counters | Not built | Would need multi-provider routing in `queue_service`/walk-in auto-routing | Dashboard provider-load view | Planned |
+| Queue-load balancing across counters | `services/walkin_service.py::choose_provider()` — runs the pure engine per candidate provider with a hypothetical walk-in appended | `POST /api/walk-ins` (no `provider_id`) | Walk-in kiosk "auto-assign" | **Implemented** for walk-ins (appointments always name a provider, by design — see `docs/api-contract.md` § Booking) |
 
 ## Metrics
 
@@ -43,7 +44,7 @@ queue engine's placement rules and ETA reason codes.
 |---|---|---|---|---|
 | Current token | `services/queue_service.py` | `GET /api/queue/providers/{id}` | Dashboard, patient status page | **Implemented** |
 | Estimated wait | `app.engine` | `GET /api/queue/providers/{id}` | Dashboard, patient status page | **Implemented** |
-| Next appointments | `models.Visit`, `services/booking` (M3) | `GET /api/appointments` | Dashboard | Scaffolded |
+| Next appointments | `models.Visit`, `services/booking_service.py` (M3) | `GET /api/appointments` (filters: `provider_id`, `department_id`, `date`, `status`) | Dashboard | **Implemented** |
 | Provider load | `services/queue_service.load()` | `GET /api/metrics` | Dashboard | **Implemented** |
 | Average waiting time | `GET /api/metrics` (averaged across every active provider's waiting visits) | `GET /api/metrics` | Dashboard metrics panel | **Implemented** |
 | Number of delayed cases | `services/queue_service.delayed_count()` (`delay_minutes > 0` or `expected_delay_min > 10`) | `GET /api/metrics` | Dashboard metrics panel | **Implemented** |
@@ -58,5 +59,6 @@ queue engine's placement rules and ETA reason codes.
 | Password hashing + JWT issuing | `core.security` (bcrypt, PyJWT HS256) | Used by `POST /api/auth/login` | N/A | Implemented |
 | Consistent error format | `schemas.common.ErrorResponse`, `app.main` exception handlers | All endpoints, including `conflict` (409) for illegal lifecycle transitions | N/A | Implemented |
 | No symptom-based priority inference | `models.Visit` (no symptom fields exist), `schemas.lifecycle.PriorityRequest` (reason required) | `POST /api/visits/{id}/priority` (receptionist/admin only, enforced) | N/A | **Implemented** |
-| Audit log / event history | `models.QueueEvent`, `services/lifecycle_service.py` + `queue_service.py` (`ETA_CHANGED` only logged when an estimate actually moves) | `GET /api/events` (newest first; filters `provider_id`, `visit_id`) | Dashboard / console event log | **Implemented** |
+| Audit log / event history | `models.QueueEvent`, `services/lifecycle_service.py` + `queue_service.py` + `booking_service.py` + `walkin_service.py` (`ETA_CHANGED` only logged when an estimate actually moves; `BOOK`/`WALK_IN` logged with the routing decision) | `GET /api/events` (newest first; filters `provider_id`, `visit_id`) | Dashboard / console event log | **Implemented** |
+| Patient directory (staff) | `models.Patient` | `POST /api/patients`, `GET /api/patients?q=` | Receptionist "find or add patient" | **Implemented** — not an HT-03 requirement by name, but needed by booking/walk-in UIs to resolve a `patient_id` |
 | Simulation and Test Console (dev tool) | `app/console/` (static HTML/CSS/JS), mounted via `StaticFiles` | `GET /console`; calls only the documented `/api/*` endpoints above | Developer console — session, sim clock, catalog, live queue board, actions, metrics/events, request inspector, scenario runner | Implemented (console UI) · now backed by real data for lifecycle/queue/metrics/events/sim |

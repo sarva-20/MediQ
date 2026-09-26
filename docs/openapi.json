@@ -217,17 +217,45 @@
         ],
         "summary": "List Services",
         "operationId": "list_services_api_services_get",
+        "parameters": [
+          {
+            "name": "department_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Department Id"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
+                  "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/ServiceOut"
                   },
-                  "type": "array",
                   "title": "Response List Services Api Services Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -324,6 +352,9 @@
               }
             }
           },
+          "409": {
+            "description": "Slot full, already ended, or the patient has an overlapping visit."
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -366,6 +397,71 @@
               "type": "integer",
               "default": 20,
               "title": "Page Size"
+            }
+          },
+          {
+            "name": "provider_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Provider Id"
+            }
+          },
+          {
+            "name": "department_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Department Id"
+            }
+          },
+          {
+            "name": "date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/VisitStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
             }
           }
         ],
@@ -516,7 +612,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/VisitOut"
+                  "$ref": "#/components/schemas/WalkInOut"
                 }
               }
             }
@@ -1025,6 +1121,108 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Page_QueueEventOut_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/patients": {
+      "post": {
+        "tags": [
+          "patients"
+        ],
+        "summary": "Create Patient",
+        "operationId": "create_patient_api_patients_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatientCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PatientOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "patients"
+        ],
+        "summary": "Search Patients",
+        "operationId": "search_patients_api_patients_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PatientOut"
+                  },
+                  "title": "Response Search Patients Api Patients Get"
                 }
               }
             }
@@ -1873,6 +2071,60 @@
         ],
         "title": "Page[VisitOut]"
       },
+      "PatientCreate": {
+        "properties": {
+          "full_name": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Full Name"
+          },
+          "phone": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Phone"
+          }
+        },
+        "type": "object",
+        "required": [
+          "full_name",
+          "phone"
+        ],
+        "title": "PatientCreate"
+      },
+      "PatientOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "full_name": {
+            "type": "string",
+            "title": "Full Name"
+          },
+          "phone": {
+            "type": "string",
+            "title": "Phone"
+          },
+          "is_simulated": {
+            "type": "boolean",
+            "title": "Is Simulated"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "full_name",
+          "phone",
+          "is_simulated",
+          "created_at"
+        ],
+        "title": "PatientOut"
+      },
       "PriorityRequest": {
         "properties": {
           "flag": {
@@ -2032,7 +2284,14 @@
             "title": "Slot Capacity"
           },
           "overbook_limit": {
-            "type": "integer",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Overbook Limit"
           }
         },
@@ -2687,6 +2946,14 @@
           "remaining": {
             "type": "integer",
             "title": "Remaining"
+          },
+          "remaining_with_overbook": {
+            "type": "integer",
+            "title": "Remaining With Overbook"
+          },
+          "is_available": {
+            "type": "boolean",
+            "title": "Is Available"
           }
         },
         "type": "object",
@@ -2697,7 +2964,9 @@
           "end_at",
           "capacity",
           "booked_count",
-          "remaining"
+          "remaining",
+          "remaining_with_overbook",
+          "is_available"
         ],
         "title": "SlotOut"
       },
@@ -2902,6 +3171,10 @@
             ],
             "title": "Delay Reason"
           },
+          "is_overbooked": {
+            "type": "boolean",
+            "title": "Is Overbooked"
+          },
           "priority_flag": {
             "type": "boolean",
             "title": "Priority Flag"
@@ -2985,6 +3258,7 @@
           "completed_at",
           "delay_minutes",
           "delay_reason",
+          "is_overbooked",
           "priority_flag",
           "priority_reason",
           "priority_set_at",
@@ -3019,12 +3293,41 @@
       "WalkInCreate": {
         "properties": {
           "patient_id": {
-            "type": "integer",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Patient Id"
           },
-          "department_code": {
-            "type": "string",
-            "title": "Department Code"
+          "full_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "department_id": {
+            "type": "integer",
+            "title": "Department Id"
           },
           "service_id": {
             "type": "integer",
@@ -3040,16 +3343,97 @@
               }
             ],
             "title": "Provider Id",
-            "description": "If omitted, auto-routed to the least-loaded active provider offering this service in the department (docs/architecture.md \u00a7 load balancer)."
+            "description": "If omitted and ClinicSettings.walkin_routing_enabled is true, auto-routed to whichever active provider in the department has the shortest hypothetical wait (docs/architecture.md \u00a7 Walk-in routing)."
           }
         },
         "type": "object",
         "required": [
-          "patient_id",
-          "department_code",
+          "department_id",
           "service_id"
         ],
         "title": "WalkInCreate"
+      },
+      "WalkInOut": {
+        "properties": {
+          "token_no": {
+            "type": "string",
+            "title": "Token No"
+          },
+          "provider_name": {
+            "type": "string",
+            "title": "Provider Name"
+          },
+          "room_label": {
+            "type": "string",
+            "title": "Room Label"
+          },
+          "estimated_wait_min": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Wait Min"
+          },
+          "eta_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eta Reason"
+          },
+          "queue_position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Queue Position"
+          },
+          "patients_ahead": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Patients Ahead"
+          },
+          "status_path": {
+            "type": "string",
+            "title": "Status Path"
+          },
+          "routing_explanation": {
+            "type": "string",
+            "title": "Routing Explanation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token_no",
+          "provider_name",
+          "room_label",
+          "estimated_wait_min",
+          "eta_reason",
+          "queue_position",
+          "patients_ahead",
+          "status_path",
+          "routing_explanation"
+        ],
+        "title": "WalkInOut",
+        "description": "Deliberately not VisitOut \u2014 a walk-in confirmation is a small, purpose-built\nreceipt (token, provider, wait, and how routing decided), not the full record."
       }
     },
     "securitySchemes": {

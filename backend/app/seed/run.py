@@ -36,6 +36,7 @@ from app.seed.data import (
 )
 from app.seed.tokens import TokenSequencer
 from app.services.queue_service import recompute_all
+from app.services.slot_service import ensure_slots_for_date
 
 PATIENT_COUNT = 40
 
@@ -155,29 +156,16 @@ def _seed_providers(session: Session, departments: dict[str, Department]) -> dic
     return providers
 
 
-def _generate_slots_for_day(session: Session, provider: Provider, day: datetime) -> int:
-    start_at = datetime.combine(day.date(), provider.shift_start, tzinfo=UTC)
-    end_at = datetime.combine(day.date(), provider.shift_end, tzinfo=UTC)
-    capacity = provider.slot_capacity + provider.overbook_limit
-    step = timedelta(minutes=provider.slot_length_min)
-
-    count = 0
-    cursor = start_at
-    while cursor + step <= end_at:
-        session.add(
-            Slot(provider_id=provider.id, start_at=cursor, end_at=cursor + step, capacity=capacity)
-        )
-        cursor += step
-        count += 1
-    return count
-
-
-def _seed_slots(session: Session, providers: dict[str, Provider], now: datetime) -> int:
+def _seed_slots(
+    session: Session, providers: dict[str, Provider], now: datetime, default_overbook_limit: int
+) -> int:
     total = 0
     for provider in providers.values():
         for day_offset in (0, 1):
-            total += _generate_slots_for_day(session, provider, now + timedelta(days=day_offset))
-    session.commit()
+            created = ensure_slots_for_date(
+                session, provider, (now + timedelta(days=day_offset)).date(), default_overbook_limit
+            )
+            total += len(created)
     return total
 
 
@@ -280,10 +268,11 @@ def seed(session: Session, reset: bool = False) -> SeedSummary:
     now = datetime.now(UTC)
 
     _seed_singletons(session)
+    settings = session.get(ClinicSettings, 1)
     departments = _seed_departments(session)
     services = _seed_services(session, departments)
     providers = _seed_providers(session, departments)
-    slot_count = _seed_slots(session, providers, now)
+    slot_count = _seed_slots(session, providers, now, settings.default_overbook_limit)
     patients = _seed_patients(session)
     user_count = _seed_users(session, providers, demo_patient=patients[0])
     visit_count = _seed_visits(session, providers, services, patients, now)

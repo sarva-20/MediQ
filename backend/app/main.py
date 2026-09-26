@@ -15,6 +15,7 @@ from app.api.catalog import router as catalog_router
 from app.api.health import router as health_router
 from app.api.lifecycle import router as lifecycle_router
 from app.api.metrics import router as metrics_router
+from app.api.patients import router as patients_router
 from app.api.queue import router as queue_router
 from app.api.sim import router as sim_router
 from app.api.stream import router as stream_router
@@ -76,6 +77,7 @@ app.include_router(walkin_router, prefix="/api")
 app.include_router(queue_router, prefix="/api")
 app.include_router(lifecycle_router, prefix="/api")
 app.include_router(metrics_router, prefix="/api")
+app.include_router(patients_router, prefix="/api")
 app.include_router(stream_router, prefix="/api")
 app.include_router(sim_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")

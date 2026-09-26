@@ -19,6 +19,8 @@ DOCUMENTED_ENDPOINTS = [
     ("post", "/api/appointments/{visit_id}/cancel"),
     ("post", "/api/visits/{visit_id}/check-in"),
     ("post", "/api/walk-ins"),
+    ("post", "/api/patients"),
+    ("get", "/api/patients"),
     ("get", "/api/queue/providers/{provider_id}"),
     ("get", "/api/queue/overview"),
     ("get", "/api/status/{token_no}"),
