@@ -35,6 +35,7 @@ venv/
 env/
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
 
 # Java / JVM
 target/
@@ -61,3 +62,7 @@ temp/
 
 # Local databases / data dumps (remove this line if a small demo DB must be submitted)
 *.sqlite-journal
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3

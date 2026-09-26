@@ -1,8 +1,8 @@
 # Team Declaration
 
-**Team ID:**  
-**Track:**  
-**Project Title:**  
+**Team ID:**  HT-03
+**Track:**  HealthTech
+**Project Title:** MediQ
 
 We declare that the material submitted in this official URAN 2026 repository represents our hackathon submission.
 

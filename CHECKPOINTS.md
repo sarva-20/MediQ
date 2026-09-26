@@ -4,13 +4,23 @@ This file provides a simple progress record. Teams should update it at the annou
 
 ## Checkpoint 1 – Architecture / Setup
 
-- Time:
-- Current commit:
-- Problem understanding completed: Yes / No
-- Architecture prepared: Yes / No
-- Repository/project structure created: Yes / No
+- Time: 10:00 AM
+- Current commit: 10:00 AM
+- Problem understanding completed: Yes
+- Architecture prepared: Yes
+- Repository/project structure created: Yes
 - Planned modules:
-- Blockers:
+  - M1 — Data model and seed
+  - M2 — Auth and roles
+  - M3 — Slots and booking
+  - M4 — Walk-ins and tokens
+  - M5 — Queue engine and wait estimation
+  - M6 — Lifecycle events and recompute
+  - M7 — Metrics and SSE
+  - M8 — Simulator dashboard
+  - M9 — Frontend
+  - M10 — Integration and docs
+- Blockers: None
 
 ## Checkpoint 2 – Core Development
 

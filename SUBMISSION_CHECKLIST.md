@@ -33,7 +33,7 @@ Complete before the official freeze.
 
 ## Final Team Confirmation
 
-- **Team ID:**  
-- **Project Title:**  
+- **Team ID:**  HT-03
+- **Project Title:** MediQ
 - **Final check completed by:**  
 - **Time of final check:**  
