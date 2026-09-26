@@ -62,6 +62,141 @@ VISIT_PLAN: list[tuple[int, VisitStatus, int, str | None]] = [
 ]
 
 
+# Dense, single-screen demo scenario for a live walkthrough (see demo/README.md).
+# Each entry's offsets are minutes relative to `now` at seed time.
+DEMO_VISIT_PLAN: list[dict] = [
+    # General Medicine, Dr. Iyer (gm_doc_1): the main demo storyline — one
+    # in-service, three checked-in (two appointments + one walk-in), two
+    # booked appointments later this hour, and one booked appointment just
+    # inside its no-show grace window so advancing the clock 10 minutes
+    # expires it and visibly pulls the rest of the queue forward.
+    {
+        "provider": "gm_doc_1",
+        "service": "gm_consult",
+        "source": VisitSource.APPOINTMENT,
+        "status": VisitStatus.IN_SERVICE,
+        "checked_in_offset": -10,
+        "started_offset": -3,
+    },
+    {
+        "provider": "gm_doc_1",
+        "service": "gm_consult",
+        "source": VisitSource.APPOINTMENT,
+        "status": VisitStatus.CHECKED_IN,
+        "scheduled_offset": -5,
+        "checked_in_offset": -4,
+    },
+    {
+        "provider": "gm_doc_1",
+        "service": "gm_followup",
+        "source": VisitSource.APPOINTMENT,
+        "status": VisitStatus.CHECKED_IN,
+        "scheduled_offset": 0,
+        "checked_in_offset": -1,
+    },
+    {
+        "provider": "gm_doc_1",
+        "service": "gm_consult",
+        "source": VisitSource.WALKIN,
+        "status": VisitStatus.CHECKED_IN,
+        "checked_in_offset": 0,
+    },
+    {
+        "provider": "gm_doc_1",
+        "service": "gm_consult",
+        "source": VisitSource.APPOINTMENT,
+        "status": VisitStatus.BOOKED,
+        "scheduled_offset": -1,  # 1 min ago; noshow_grace_minutes=10 -> expires at +9
+    },
+    {
+        "provider": "gm_doc_1",
+        "service": "gm_consult",
+        "source": VisitSource.APPOINTMENT,
+        "status": VisitStatus.BOOKED,
+        "scheduled_offset": 20,
+    },
+    {
+        "provider": "gm_doc_1",
+        "service": "gm_consult",
+        "source": VisitSource.APPOINTMENT,
+        "status": VisitStatus.BOOKED,
+        "scheduled_offset": 35,
+    },
+    # General Medicine, Dr. Nair (gm_doc_2): light queue so walk-in
+    # auto-routing visibly prefers this doctor over Dr. Iyer.
+    {
+        "provider": "gm_doc_2",
+        "service": "gm_consult",
+        "source": VisitSource.APPOINTMENT,
+        "status": VisitStatus.BOOKED,
+        "scheduled_offset": 120,
+    },
+    # Radiology: two CT scans queued (prep time shows in the wait), one
+    # X-Ray, one Ultrasound.
+    {
+        "provider": "rad_ct_1",
+        "service": "rad_ct",
+        "source": VisitSource.APPOINTMENT,
+        "status": VisitStatus.CHECKED_IN,
+        "scheduled_offset": -2,
+        "checked_in_offset": -2,
+    },
+    {
+        "provider": "rad_ct_1",
+        "service": "rad_ct",
+        "source": VisitSource.APPOINTMENT,
+        "status": VisitStatus.CHECKED_IN,
+        "scheduled_offset": -1,
+        "checked_in_offset": -1,
+    },
+    {
+        "provider": "rad_xray_1",
+        "service": "rad_xray",
+        "source": VisitSource.WALKIN,
+        "status": VisitStatus.CHECKED_IN,
+        "checked_in_offset": 0,
+    },
+    {
+        "provider": "rad_us_1",
+        "service": "rad_ultrasound",
+        "source": VisitSource.WALKIN,
+        "status": VisitStatus.CHECKED_IN,
+        "checked_in_offset": 0,
+    },
+    # Paediatrics and Ophthalmology: one or two patients each.
+    {
+        "provider": "ped_doc_1",
+        "service": "ped_consult",
+        "source": VisitSource.APPOINTMENT,
+        "status": VisitStatus.CHECKED_IN,
+        "scheduled_offset": -3,
+        "checked_in_offset": -2,
+    },
+    {
+        "provider": "ped_doc_1",
+        "service": "ped_vaccination",
+        "source": VisitSource.APPOINTMENT,
+        "status": VisitStatus.BOOKED,
+        "scheduled_offset": 25,
+    },
+    {
+        "provider": "oph_doc_1",
+        "service": "oph_consult",
+        "source": VisitSource.APPOINTMENT,
+        "status": VisitStatus.CHECKED_IN,
+        "scheduled_offset": -4,
+        "checked_in_offset": -3,
+    },
+    {
+        "provider": "oph_doc_1",
+        "service": "oph_pressure",
+        "source": VisitSource.APPOINTMENT,
+        "status": VisitStatus.BOOKED,
+        "scheduled_offset": 30,
+    },
+]
+
+
 @dataclass
 class SeedSummary:
     departments: int = 0
@@ -259,7 +394,47 @@ def _seed_visits(
     return len(VISIT_PLAN)
 
 
-def seed(session: Session, reset: bool = False) -> SeedSummary:
+def _seed_demo_visits(
+    session: Session,
+    providers: dict[str, Provider],
+    services: dict[str, Service],
+    patients: list[Patient],
+    now: datetime,
+) -> int:
+    sequencer = TokenSequencer()
+    department_code_for = {entry["key"]: entry["department"] for entry in PROVIDERS}
+
+    for i, plan in enumerate(DEMO_VISIT_PLAN):
+        provider = providers[plan["provider"]]
+        service = services[plan["service"]]
+        patient = patients[i % len(patients)]
+        source_letter = "W" if plan["source"] is VisitSource.WALKIN else "A"
+        token_no = sequencer.next(department_code_for[plan["provider"]], source_letter)
+
+        session.add(
+            Visit(
+                patient_id=patient.id,
+                provider_id=provider.id,
+                service_id=service.id,
+                source=plan["source"],
+                token_no=token_no,
+                status=plan["status"],
+                scheduled_start=now + timedelta(minutes=plan["scheduled_offset"])
+                if "scheduled_offset" in plan
+                else None,
+                checked_in_at=now + timedelta(minutes=plan["checked_in_offset"])
+                if "checked_in_offset" in plan
+                else None,
+                started_at=now + timedelta(minutes=plan["started_offset"])
+                if "started_offset" in plan
+                else None,
+            )
+        )
+    session.commit()
+    return len(DEMO_VISIT_PLAN)
+
+
+def seed(session: Session, reset: bool = False, scenario: str = "default") -> SeedSummary:
     if reset:
         reset_all(session)
     elif _already_seeded(session):
@@ -275,7 +450,10 @@ def seed(session: Session, reset: bool = False) -> SeedSummary:
     slot_count = _seed_slots(session, providers, now, settings.default_overbook_limit)
     patients = _seed_patients(session)
     user_count = _seed_users(session, providers, demo_patient=patients[0])
-    visit_count = _seed_visits(session, providers, services, patients, now)
+    if scenario == "demo":
+        visit_count = _seed_demo_visits(session, providers, services, patients, now)
+    else:
+        visit_count = _seed_visits(session, providers, services, patients, now)
 
     # Without this, every visit's estimated_start/eta_reason is None until
     # whatever client happens to trigger the first recompute — and that

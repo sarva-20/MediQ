@@ -55,7 +55,9 @@ def test_slot_generation_is_idempotent(
 
 
 def test_slots_reflect_bookings(client: TestClient, auth_fixture: AuthFixture) -> None:
-    slot = _slots(client, auth_fixture.provider.id)[0]
+    # Last slot of the day, not the first: the first slot can already be past its
+    # end (or no-show grace) depending on the wall-clock time the suite runs at.
+    slot = _slots(client, auth_fixture.provider.id)[-1]
     assert slot["remaining"] == slot["capacity"]
 
     booking = client.post(

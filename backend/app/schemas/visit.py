@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enums import VisitSource, VisitStatus
 
@@ -34,3 +34,6 @@ class VisitOut(BaseModel):
     estimated_wait_min: int | None
     eta_reason: str | None
     created_at: datetime
+    service_name: str | None = None
+    department_id: int | None = None
+    phone: str | None = Field(default=None, description="Staff roles only.")

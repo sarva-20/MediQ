@@ -11,3 +11,7 @@ class SimClockOut(BaseModel):
 
 class AdvanceRequest(BaseModel):
     minutes: int = Field(gt=0)
+
+
+class SeedRequest(BaseModel):
+    scenario: str = "default"

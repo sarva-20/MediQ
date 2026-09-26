@@ -1,4 +1,5 @@
-"""Usage (from backend/, with the venv active): `python -m app.seed [--reset]`."""
+"""Usage (from backend/, with the venv active): `python -m app.seed [--reset]
+[--scenario default|demo]`."""
 
 import argparse
 
@@ -13,11 +14,17 @@ def main() -> None:
     parser.add_argument(
         "--reset", action="store_true", help="Wipe existing seed data before reseeding."
     )
+    parser.add_argument(
+        "--scenario",
+        choices=["default", "demo"],
+        default="default",
+        help="'demo' builds a dense, single-screen live-demo state (see demo/README.md).",
+    )
     args = parser.parse_args()
 
     create_db_and_tables()
     with Session(engine) as session:
-        summary = seed(session, reset=args.reset)
+        summary = seed(session, reset=args.reset, scenario=args.scenario)
 
     if summary.skipped:
         print("Database already seeded; skipped. Use --reset to reseed from scratch.")

@@ -9,7 +9,7 @@ from app.core.db import get_session
 from app.models.department import Department
 from app.models.provider import Provider
 from app.models.service import Service
-from app.schemas.catalog import DepartmentOut, ProviderOut, ServiceOut, SlotOut
+from app.schemas.catalog import DepartmentOut, ProviderListOut, ProviderOut, ServiceOut, SlotOut
 from app.services import queue_service
 from app.services.slot_service import effective_overbook_limit, ensure_slots_for_date
 
@@ -32,6 +32,37 @@ def list_department_providers(
         )
     ).all()
     return [ProviderOut.model_validate(p) for p in providers]
+
+
+@router.get("/providers", response_model=list[ProviderListOut])
+def list_providers(
+    department_id: int | None = None,
+    is_active: bool | None = None,
+    session: Session = Depends(get_session),
+) -> list[ProviderListOut]:
+    query = select(Provider)
+    if department_id is not None:
+        query = query.where(Provider.department_id == department_id)
+    active_filter = True if is_active is None else is_active
+    query = query.where(Provider.is_active.is_(active_filter))
+    providers = session.exec(query).all()
+    settings = queue_service.get_settings(session)
+    return [
+        ProviderListOut(
+            id=p.id,
+            department_id=p.department_id,
+            name=p.name,
+            kind=p.kind,
+            room_label=p.room_label,
+            is_active=p.is_active,
+            shift_start=p.shift_start,
+            shift_end=p.shift_end,
+            slot_length_min=p.slot_length_min,
+            slot_capacity=p.slot_capacity,
+            overbook_limit=effective_overbook_limit(p, settings.default_overbook_limit),
+        )
+        for p in providers
+    ]
 
 
 @router.get("/providers/{provider_id}", response_model=ProviderOut)

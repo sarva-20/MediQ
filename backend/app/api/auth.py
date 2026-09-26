@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Depends
 from sqlmodel import Session, select
 
-from app.api.deps import get_current_user, unauthorized
+from app.api.deps import conflict, get_current_user, unauthorized
 from app.core.db import get_session
 from app.core.security import create_access_token, hash_password, verify_password
+from app.models.enums import UserRole
+from app.models.patient import Patient
 from app.models.user import User
-from app.schemas.auth import LoginRequest, LoginResponse, UserOut
+from app.schemas.auth import LoginRequest, LoginResponse, RegisterRequest, UserOut
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -27,6 +29,35 @@ def login(body: LoginRequest, session: Session = Depends(get_session)) -> LoginR
     # vulnerability (user enumeration).
     if user is None or not user.is_active or not password_ok:
         raise unauthorized("invalid_credentials", INVALID_CREDENTIALS_MESSAGE)
+
+    return LoginResponse(
+        access_token=create_access_token(user.id),
+        role=user.role,
+        user_id=user.id,
+        provider_id=user.provider_id,
+        patient_id=user.patient_id,
+    )
+
+
+@router.post("/register", response_model=LoginResponse, status_code=201)
+def register(body: RegisterRequest, session: Session = Depends(get_session)) -> LoginResponse:
+    if session.exec(select(User).where(User.username == body.email)).first() is not None:
+        raise conflict("An account with that email already exists.")
+
+    patient = Patient(full_name=body.name, phone=body.phone, is_simulated=False)
+    session.add(patient)
+    session.commit()
+    session.refresh(patient)
+
+    user = User(
+        username=body.email,
+        password_hash=hash_password(body.password),
+        role=UserRole.PATIENT,
+        patient_id=patient.id,
+    )
+    session.add(user)
+    session.commit()
+    session.refresh(user)
 
     return LoginResponse(
         access_token=create_access_token(user.id),

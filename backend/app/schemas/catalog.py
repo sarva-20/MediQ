@@ -41,6 +41,23 @@ class ProviderOut(BaseModel):
     overbook_limit: int | None
 
 
+class ProviderListOut(BaseModel):
+    """GET /api/providers — like ProviderOut but overbook_limit is resolved to
+    its effective value (provider's own, or the clinic default)."""
+
+    id: int
+    department_id: int
+    name: str
+    kind: ProviderKind
+    room_label: str
+    is_active: bool
+    shift_start: time
+    shift_end: time
+    slot_length_min: int
+    slot_capacity: int
+    overbook_limit: int
+
+
 class SlotOut(BaseModel):
     id: int
     provider_id: int

@@ -12,8 +12,12 @@ from tests.helpers import auth_header
 
 
 def _slots(client: TestClient, provider_id: int) -> list[dict]:
+    # The *last* slot of the day, not the first: picking the day's opening slot
+    # made this suite flaky depending on the wall-clock time it happened to run
+    # at, since a scheduled_start already more than noshow_grace_minutes in the
+    # past auto-no-shows the visit the instant it's booked.
     date_str = datetime.now(UTC).date().isoformat()
-    return client.get(f"/api/providers/{provider_id}/slots?date={date_str}").json()
+    return list(reversed(client.get(f"/api/providers/{provider_id}/slots?date={date_str}").json()))
 
 
 def _book(

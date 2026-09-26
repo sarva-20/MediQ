@@ -6,7 +6,7 @@ from app.core import clock
 from app.core.db import get_session
 from app.models.enums import UserRole
 from app.models.sim_clock import SimClock
-from app.schemas.sim import AdvanceRequest, SimClockOut
+from app.schemas.sim import AdvanceRequest, SeedRequest, SimClockOut
 from app.seed.run import seed
 from app.services import queue_service
 
@@ -53,5 +53,8 @@ def reset_sim_clock(session: Session = Depends(get_session)) -> SimClockOut:
 
 
 @router.post("/seed", status_code=202)
-def reseed_demo_data(session: Session = Depends(get_session)) -> None:
-    seed(session, reset=True)
+def reseed_demo_data(
+    body: SeedRequest | None = None, session: Session = Depends(get_session)
+) -> None:
+    scenario = body.scenario if body is not None else "default"
+    seed(session, reset=True, scenario=scenario)

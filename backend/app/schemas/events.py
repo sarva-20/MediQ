@@ -15,3 +15,4 @@ class QueueEventOut(BaseModel):
     sim_time: datetime
     actor_user_id: int | None
     created_at: datetime
+    detail: str = ""

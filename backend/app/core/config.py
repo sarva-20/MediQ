@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     app_name: str = "MediQ"
     environment: str = "development"
     database_url: str = "sqlite:///./mediq.db"
-    cors_origins: str = "http://localhost:5173"
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     jwt_secret_key: str = ""
     jwt_algorithm: str = "HS256"

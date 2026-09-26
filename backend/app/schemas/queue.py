@@ -19,6 +19,24 @@ class QueueVisitOut(BaseModel):
     expected_delay_min: int
     eta_reason: str | None
     priority_flag: bool
+    service_name: str
+    service_duration_min: int
+    is_walkin: bool
+    phone: str | None = Field(default=None, description="Staff roles only.")
+    delay_minutes: int
+    delay_reason: str | None
+
+
+class NowServingOut(BaseModel):
+    """The visit currently in service, if any — mirrors `current_token` with
+    the extra detail a live board needs to render it as its own card."""
+
+    visit_id: int
+    token_no: str
+    patient_name: str
+    status: VisitStatus
+    started_at: datetime | None
+    service_name: str
 
 
 class QueueSnapshotOut(BaseModel):
@@ -29,6 +47,7 @@ class QueueSnapshotOut(BaseModel):
     provider_name: str
     department_code: str
     current_token: str | None
+    now_serving: NowServingOut | None
     next_tokens: list[str]
     load: int
     delayed_count: int

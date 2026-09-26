@@ -4,12 +4,14 @@ from sqlmodel import Session, select
 from app.api.deps import ensure_provider_scope, not_found, require_roles
 from app.core.db import get_session
 from app.models.department import Department
-from app.models.enums import UserRole, VisitStatus
+from app.models.enums import UserRole, VisitSource, VisitStatus
 from app.models.patient import Patient
 from app.models.provider import Provider
+from app.models.service import Service
 from app.models.user import User
 from app.models.visit import Visit
 from app.schemas.queue import (
+    NowServingOut,
     ProviderQueueSummaryOut,
     PublicStatusOut,
     QueueOverviewOut,
@@ -41,11 +43,14 @@ def _department_code(session: Session, provider: Provider) -> str:
     return department.code if department else ""
 
 
-def _build_snapshot_out(session: Session, snapshot: QueueSnapshot) -> QueueSnapshotOut:
+def _build_snapshot_out(
+    session: Session, snapshot: QueueSnapshot, include_phone: bool
+) -> QueueSnapshotOut:
     queue: list[QueueVisitOut] = []
     for placement in snapshot.placements:
         visit = snapshot.visits_by_id[placement.visit_id]
         patient = session.get(Patient, visit.patient_id)
+        service = session.get(Service, visit.service_id)
         queue.append(
             QueueVisitOut(
                 visit_id=visit.id,
@@ -59,7 +64,27 @@ def _build_snapshot_out(session: Session, snapshot: QueueSnapshot) -> QueueSnaps
                 expected_delay_min=placement.expected_delay_min,
                 eta_reason=placement.eta_reason,
                 priority_flag=visit.priority_flag,
+                service_name=service.name if service else "",
+                service_duration_min=service.default_duration_min if service else 0,
+                is_walkin=visit.source is VisitSource.WALKIN,
+                phone=(patient.phone if include_phone and patient else None),
+                delay_minutes=visit.delay_minutes,
+                delay_reason=visit.delay_reason,
             )
+        )
+
+    now_serving = None
+    if snapshot.in_service_visit is not None:
+        visit = snapshot.in_service_visit
+        patient = session.get(Patient, visit.patient_id)
+        service = session.get(Service, visit.service_id)
+        now_serving = NowServingOut(
+            visit_id=visit.id,
+            token_no=visit.token_no,
+            patient_name=_mask_patient_name(patient.full_name) if patient else "Unknown",
+            status=visit.status,
+            started_at=visit.started_at,
+            service_name=service.name if service else "",
         )
 
     return QueueSnapshotOut(
@@ -67,6 +92,7 @@ def _build_snapshot_out(session: Session, snapshot: QueueSnapshot) -> QueueSnaps
         provider_name=snapshot.provider.name,
         department_code=_department_code(session, snapshot.provider),
         current_token=snapshot.in_service_visit.token_no if snapshot.in_service_visit else None,
+        now_serving=now_serving,
         next_tokens=[v.token_no for v in queue[:NEXT_TOKENS_PREVIEW_SIZE]],
         load=queue_service.load(snapshot),
         delayed_count=queue_service.delayed_count(snapshot),
@@ -85,7 +111,7 @@ def get_provider_queue(
         snapshot = queue_service.recompute_provider(session, provider_id)
     except ValueError as exc:
         raise not_found("Provider not found.") from exc
-    return _build_snapshot_out(session, snapshot)
+    return _build_snapshot_out(session, snapshot, include_phone=True)
 
 
 @router.get("/queue/overview", response_model=QueueOverviewOut)
