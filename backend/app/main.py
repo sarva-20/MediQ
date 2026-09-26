@@ -1,10 +1,12 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.admin import router as admin_router
 from app.api.auth import router as auth_router
@@ -77,6 +79,12 @@ app.include_router(metrics_router, prefix="/api")
 app.include_router(stream_router, prefix="/api")
 app.include_router(sim_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
+
+# Development/demo tool — see docs/architecture.md § Simulation and Test Console.
+# Only ever calls the real /api/* surface above; not part of the patient/staff product.
+app.mount(
+    "/console", StaticFiles(directory=Path(__file__).parent / "console", html=True), name="console"
+)
 
 
 @app.get("/")

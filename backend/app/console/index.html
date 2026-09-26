@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MediQ Console</title>
+<link rel="stylesheet" href="/console/console.css">
+</head>
+<body>
+
+<header>
+  <h1>MediQ Console</h1>
+  <span class="muted">development &amp; demo tool — not part of the patient/staff product</span>
+  <div class="spacer"></div>
+  <span id="session-summary">not logged in</span>
+  <span id="stream-indicator"><span class="dot"></span><span id="stream-indicator-label">stream idle</span></span>
+</header>
+
+<main>
+
+  <!-- 1. Session -->
+  <section class="panel" id="panel-session">
+    <h2>Session</h2>
+    <p class="hint">Demo accounts from <code>demo/README.md</code>. Token is kept in memory only — reloading the page logs you out.</p>
+    <div class="row">
+      <label for="demo-user-select">Demo user</label>
+      <select id="demo-user-select"></select>
+      <button id="use-demo-user-btn">Fill in</button>
+    </div>
+    <div class="row">
+      <label for="login-username">Username</label>
+      <input type="text" id="login-username">
+    </div>
+    <div class="row">
+      <label for="login-password">Password</label>
+      <input type="password" id="login-password">
+    </div>
+    <div class="row">
+      <button class="primary" id="login-btn">Log in</button>
+      <button id="logout-btn">Log out</button>
+      <button id="whoami-btn">GET /api/auth/me</button>
+    </div>
+    <div id="session-details"></div>
+  </section>
+
+  <!-- 2. Simulated clock -->
+  <section class="panel" id="panel-clock">
+    <h2>Simulated Clock</h2>
+    <p class="hint">Admin-only. All demo timing runs off this clock, not the wall clock.</p>
+    <div id="clock-display" class="tiles"></div>
+    <div class="row">
+      <button data-advance="5">+5 min</button>
+      <button data-advance="10">+10 min</button>
+      <button data-advance="30">+30 min</button>
+      <button id="clock-freeze-btn">Freeze</button>
+      <button id="clock-resume-btn">Resume</button>
+      <button id="clock-reset-btn">Reset</button>
+      <button id="clock-reseed-btn">Reseed demo data</button>
+      <button id="clock-refresh-btn">Refresh</button>
+    </div>
+  </section>
+
+  <!-- 3. Catalog -->
+  <section class="panel" id="panel-catalog">
+    <h2>Catalog</h2>
+    <div class="row">
+      <label for="department-select">Department</label>
+      <select id="department-select"><option value="">—</option></select>
+      <input type="text" class="override" id="department-override" placeholder="or ID">
+      <button id="department-override-go">Go</button>
+    </div>
+    <div class="row">
+      <label for="provider-select">Provider</label>
+      <select id="provider-select"><option value="">—</option></select>
+      <input type="text" class="override" id="provider-override" placeholder="or ID">
+      <button id="provider-override-go">Go</button>
+    </div>
+    <div class="row">
+      <button id="catalog-refresh-btn">Refresh catalog</button>
+    </div>
+    <p class="hint" id="catalog-status"></p>
+  </section>
+
+  <!-- 4. Live queue board -->
+  <section class="panel wide" id="panel-queue">
+    <h2>Live Queue Board</h2>
+    <p class="hint">For the provider selected in Catalog. Click a row to select that visit for the Actions panel below.</p>
+    <div id="queue-summary" class="tiles"></div>
+    <div class="row">
+      <button id="queue-refresh-btn">Refresh now</button>
+    </div>
+    <table id="queue-table">
+      <thead>
+        <tr>
+          <th>Token</th><th>Status</th><th>Source</th><th>Priority</th>
+          <th>Est. wait</th><th>ETA reason</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <!-- 5. Actions -->
+  <section class="panel wide" id="panel-actions">
+    <h2>Actions</h2>
+    <div id="selected-visit-banner">No visit selected — pick a row above, or type a Visit ID in an action card.</div>
+    <div class="actions-grid">
+
+      <div class="action-card">
+        <h3>Book appointment</h3>
+        <div class="row"><label>Patient ID</label><input type="number" id="book-patient-id"><button id="book-use-my-patient">use mine</button></div>
+        <div class="row"><label>Provider ID</label><input type="number" id="book-provider-id"></div>
+        <div class="row"><label>Service</label><select id="book-service-select"><option value="">—</option></select><input type="number" class="override" id="book-service-override" placeholder="or ID"></div>
+        <div class="row"><label>Date</label><input type="date" id="book-date"><button id="book-load-slots">Load slots</button></div>
+        <div class="row"><label>Slot</label><select id="book-slot-select"><option value="">—</option></select><input type="number" class="override" id="book-slot-override" placeholder="or ID"></div>
+        <button class="primary" id="book-submit">POST /api/appointments</button>
+      </div>
+
+      <div class="action-card">
+        <h3>Walk-in</h3>
+        <div class="row"><label>Patient ID</label><input type="number" id="walkin-patient-id"><button id="walkin-use-my-patient">use mine</button></div>
+        <div class="row"><label>Department</label><input type="text" id="walkin-department-code" placeholder="e.g. GM"></div>
+        <div class="row"><label>Service</label><select id="walkin-service-select"><option value="">—</option></select><input type="number" class="override" id="walkin-service-override" placeholder="or ID"></div>
+        <div class="row"><label>Provider (opt.)</label><input type="number" id="walkin-provider-id" placeholder="auto-route if blank"></div>
+        <button class="primary" id="walkin-submit">POST /api/walk-ins</button>
+      </div>
+
+      <div class="action-card">
+        <h3>Check-in</h3>
+        <div class="row"><label>Visit ID</label><input type="number" id="checkin-visit-id"></div>
+        <button class="primary" id="checkin-submit">POST /api/visits/{id}/check-in</button>
+      </div>
+
+      <div class="action-card">
+        <h3>Start</h3>
+        <div class="row"><label>Visit ID</label><input type="number" id="start-visit-id"></div>
+        <button class="primary" id="start-submit">POST /api/visits/{id}/start</button>
+      </div>
+
+      <div class="action-card">
+        <h3>Delay</h3>
+        <div class="row"><label>Visit ID</label><input type="number" id="delay-visit-id"></div>
+        <div class="row"><label>Minutes</label><input type="number" id="delay-minutes" value="15"></div>
+        <div class="row"><label>Reason</label><input type="text" id="delay-reason" value="Running behind schedule"></div>
+        <button class="primary" id="delay-submit">POST /api/visits/{id}/delay</button>
+      </div>
+
+      <div class="action-card">
+        <h3>Complete</h3>
+        <div class="row"><label>Visit ID</label><input type="number" id="complete-visit-id"></div>
+        <button class="primary" id="complete-submit">POST /api/visits/{id}/complete</button>
+      </div>
+
+      <div class="action-card">
+        <h3>Cancel</h3>
+        <div class="row"><label>Visit ID</label><input type="number" id="cancel-visit-id"></div>
+        <button class="primary" id="cancel-submit">POST /api/appointments/{id}/cancel</button>
+      </div>
+
+      <div class="action-card">
+        <h3>No-show</h3>
+        <div class="row"><label>Visit ID</label><input type="number" id="noshow-visit-id"></div>
+        <button class="primary" id="noshow-submit">POST /api/visits/{id}/no-show</button>
+      </div>
+
+      <div class="action-card">
+        <h3>Priority</h3>
+        <div class="row"><label>Visit ID</label><input type="number" id="priority-visit-id"></div>
+        <div class="row"><label>Flag</label>
+          <select id="priority-flag"><option value="true">set</option><option value="false">remove</option></select>
+        </div>
+        <div class="row"><label>Reason</label><input type="text" id="priority-reason" value="Staff-assigned priority"></div>
+        <button class="primary" id="priority-submit">POST /api/visits/{id}/priority</button>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- 6. Metrics and events -->
+  <section class="panel" id="panel-metrics">
+    <h2>Metrics</h2>
+    <button id="metrics-refresh-btn">GET /api/metrics</button>
+    <div id="metrics-tiles" class="tiles"></div>
+    <table id="metrics-load-table">
+      <thead><tr><th>Provider</th><th>Dept</th><th>Load</th><th>Delayed</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <section class="panel" id="panel-events">
+    <h2>Event log</h2>
+    <button id="events-refresh-btn">GET /api/events</button>
+    <table id="events-table">
+      <thead><tr><th>Type</th><th>Visit</th><th>Provider</th><th>Sim time</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <!-- 8. Scenario runner -->
+  <section class="panel wide" id="panel-scenarios">
+    <h2>Scenario Runner</h2>
+    <p class="hint">Scripted, multi-step demo flows. A step that needs an endpoint that isn't built yet shows as "skipped: not implemented" — that's expected, not a failure.</p>
+    <div class="row">
+      <button id="scenario-morning-rush">Run: Morning rush</button>
+      <button id="scenario-delay">Run: Delay scenario</button>
+      <button id="scenario-noshow">Run: No-show scenario</button>
+    </div>
+    <ul class="scenario-steps" id="scenario-output"></ul>
+  </section>
+
+  <!-- 7. Request inspector -->
+  <section class="panel wide" id="panel-inspector">
+    <h2>Request Inspector</h2>
+    <div class="row">
+      <button id="inspector-clear-btn">Clear log</button>
+      <span class="muted" id="inspector-count">0 requests</span>
+    </div>
+    <div id="inspector-log"></div>
+  </section>
+
+</main>
+
+<script src="/console/console.js"></script>
+</body>
+</html>

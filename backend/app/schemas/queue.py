@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from app.models.enums import VisitStatus
+from app.models.enums import VisitSource, VisitStatus
 
 
 class QueueVisitOut(BaseModel):
@@ -12,6 +12,7 @@ class QueueVisitOut(BaseModel):
     token_no: str
     patient_name: str
     status: VisitStatus
+    source: VisitSource
     position: int
     estimated_start: datetime | None
     estimated_wait_min: int | None

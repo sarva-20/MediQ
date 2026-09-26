@@ -13,6 +13,8 @@ class LoginResponse(BaseModel):
     token_type: str = "bearer"
     role: UserRole
     user_id: int
+    provider_id: int | None = None
+    patient_id: int | None = None
 
 
 class UserOut(BaseModel):

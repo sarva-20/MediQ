@@ -89,7 +89,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/api/departments": {
@@ -293,6 +298,11 @@
         ],
         "summary": "Create Appointment",
         "operationId": "create_appointment_api_appointments_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -332,6 +342,11 @@
         ],
         "summary": "List Appointments",
         "operationId": "list_appointments_api_appointments_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "page",
@@ -385,6 +400,11 @@
         ],
         "summary": "Cancel Appointment",
         "operationId": "cancel_appointment_api_appointments__visit_id__cancel_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "visit_id",
@@ -427,6 +447,11 @@
         ],
         "summary": "Check In Visit",
         "operationId": "check_in_visit_api_visits__visit_id__check_in_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "visit_id",
@@ -500,7 +525,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/api/queue/providers/{provider_id}": {
@@ -510,6 +540,11 @@
         ],
         "summary": "Get Provider Queue",
         "operationId": "get_provider_queue_api_queue_providers__provider_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "provider_id",
@@ -563,7 +598,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/api/status/{token_no}": {
@@ -572,6 +612,7 @@
           "queue"
         ],
         "summary": "Get Public Status",
+        "description": "Public, no login required \u2014 this is the token board patients check.",
         "operationId": "get_public_status_api_status__token_no__get",
         "parameters": [
           {
@@ -615,6 +656,11 @@
         ],
         "summary": "Start Visit",
         "operationId": "start_visit_api_visits__visit_id__start_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "visit_id",
@@ -657,6 +703,11 @@
         ],
         "summary": "Delay Visit",
         "operationId": "delay_visit_api_visits__visit_id__delay_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "visit_id",
@@ -709,6 +760,11 @@
         ],
         "summary": "Complete Visit",
         "operationId": "complete_visit_api_visits__visit_id__complete_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "visit_id",
@@ -751,6 +807,11 @@
         ],
         "summary": "Mark No Show",
         "operationId": "mark_no_show_api_visits__visit_id__no_show_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "visit_id",
@@ -794,6 +855,11 @@
         "summary": "Set Priority",
         "description": "Staff only. See PriorityRequest \u2014 no symptom/clinical field exists here.",
         "operationId": "set_priority_api_visits__visit_id__priority_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "visit_id",
@@ -857,7 +923,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/api/events": {
@@ -867,6 +938,11 @@
         ],
         "summary": "List Events",
         "operationId": "list_events_api_events_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "page",
@@ -919,7 +995,7 @@
           "stream"
         ],
         "summary": "Stream Queue Updates",
-        "description": "Server-Sent Events stream of QueueSnapshotOut updates, one event per\nrecompute. See docs/api-contract.md \u00a7 Live for event types and payload shape.",
+        "description": "Server-Sent Events stream of QueueSnapshotOut updates, one event per\nrecompute. See docs/api-contract.md \u00a7 Live for event types and payload shape.\nLeft ungated like GET /api/status/{token_no}: the public status page consumes\nthis without login, same as staff dashboards do while authenticated.",
         "operationId": "stream_queue_updates_api_stream_get",
         "responses": {
           "200": {
@@ -951,7 +1027,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/api/sim/advance": {
@@ -992,7 +1073,65 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/sim/freeze": {
+      "post": {
+        "tags": [
+          "simulation"
+        ],
+        "summary": "Freeze Sim Clock",
+        "description": "Wraps app.core.clock.freeze \u2014 added for the console's Freeze/Resume\ncontrols; the underlying clock logic is already implemented and unit-tested\n(see backend/tests/test_clock.py), only the HTTP surface is still M8.",
+        "operationId": "freeze_sim_clock_api_sim_freeze_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimClockOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/sim/resume": {
+      "post": {
+        "tags": [
+          "simulation"
+        ],
+        "summary": "Resume Sim Clock",
+        "operationId": "resume_sim_clock_api_sim_resume_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimClockOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/api/sim/reset": {
@@ -1013,7 +1152,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/api/sim/seed": {
@@ -1032,7 +1176,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/api/admin/settings": {
@@ -1053,7 +1202,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       },
       "put": {
         "tags": [
@@ -1092,7 +1246,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/api/admin/services/{service_id}": {
@@ -1102,6 +1261,11 @@
         ],
         "summary": "Update Service",
         "operationId": "update_service_api_admin_services__service_id__put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "service_id",
@@ -1169,7 +1333,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -1208,7 +1377,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/api/admin/providers/{provider_id}": {
@@ -1218,6 +1392,11 @@
         ],
         "summary": "Update Provider",
         "operationId": "update_provider_api_admin_providers__provider_id__put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "provider_id",
@@ -1510,6 +1689,28 @@
           "user_id": {
             "type": "integer",
             "title": "User Id"
+          },
+          "provider_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Id"
+          },
+          "patient_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Patient Id"
           }
         },
         "type": "object",
@@ -2193,6 +2394,9 @@
           "status": {
             "$ref": "#/components/schemas/VisitStatus"
           },
+          "source": {
+            "$ref": "#/components/schemas/VisitSource"
+          },
           "position": {
             "type": "integer",
             "title": "Position"
@@ -2242,6 +2446,7 @@
           "token_no",
           "patient_name",
           "status",
+          "source",
           "position",
           "estimated_start",
           "estimated_wait_min",
@@ -2744,6 +2949,12 @@
           "service_id"
         ],
         "title": "WalkInCreate"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
       }
     }
   }

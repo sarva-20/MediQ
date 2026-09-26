@@ -1,6 +1,7 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
-from app.api.deps import not_implemented
+from app.api.deps import not_implemented, require_roles
+from app.models.enums import UserRole
 from app.schemas.admin import (
     ClinicSettingsOut,
     ClinicSettingsUpdate,
@@ -10,7 +11,9 @@ from app.schemas.admin import (
 )
 from app.schemas.catalog import ProviderOut, ServiceOut
 
-router = APIRouter(prefix="/admin", tags=["admin"])
+router = APIRouter(
+    prefix="/admin", tags=["admin"], dependencies=[Depends(require_roles(UserRole.ADMIN))]
+)
 
 
 @router.get("/settings", response_model=ClinicSettingsOut)

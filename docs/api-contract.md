@@ -1,11 +1,14 @@
 # API Contract
 
-This is the contract to build the frontend against. As of Module M1, every endpoint
-below exists and appears in `/docs` (Swagger UI) with its real request/response
-schemas, but every business endpoint (everything except `GET /api/health`) responds
-`501 Not Implemented` with the error envelope described below — implementation
-lands module by module (see `docs/requirements-traceability.md` for current status).
-The machine-readable version is `docs/openapi.json`, exported from the running app.
+This is the contract to build the frontend against. Every endpoint below exists and
+appears in `/docs` (Swagger UI) with its real request/response schemas. As of
+Module M2, `POST /api/auth/login` and `GET /api/auth/me` are fully implemented and
+every other endpoint enforces its documented role (and, where noted, object-level
+ownership) — but the underlying business logic is still a `501 Not Implemented`
+placeholder, so a request that clears the auth/role check will still get a 501, not
+real data. Implementation lands module by module (see
+`docs/requirements-traceability.md` for current status). The machine-readable
+version is `docs/openapi.json`, exported from the running app.
 
 Base URL: `http://localhost:8000/api` (local dev). All request/response bodies are
 JSON. All timestamps are ISO 8601, UTC (`...Z`); the frontend converts to
@@ -13,11 +16,34 @@ Asia/Kolkata for display.
 
 ## Conventions
 
-### Authentication (from Module M2)
+### Authentication
 
-`POST /api/auth/login` returns a bearer token; send it as `Authorization: Bearer <token>`
-on subsequent requests. Until M2 lands, no endpoint enforces this — the "Role"
-column below documents the *intended* permission, not current behavior.
+`POST /api/auth/login` takes `{"username", "password"}` and returns:
+
+```json
+{
+  "access_token": "<jwt>",
+  "token_type": "bearer",
+  "role": "receptionist",
+  "user_id": 2,
+  "provider_id": null,
+  "patient_id": null
+}
+```
+
+Send the token on every subsequent request as `Authorization: Bearer <access_token>`.
+The token is a signed JWT (HS256) containing only `sub` (user id), `iat`, and `exp` —
+role/provider_id/patient_id are looked up fresh from the database on every request
+(via `GET /api/auth/me` or implicitly by protected endpoints), not trusted from the
+token, so deactivating a user takes effect immediately rather than only after their
+token expires. Tokens expire after `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` (default 60);
+there is no refresh endpoint yet — the frontend should re-login on a `token_expired`
+response.
+
+The "Role" column in every table below is enforced now, not just documented intent.
+Where a row says "(own)" (e.g. "Provider (own)"), that role is further restricted to
+resources it owns (its own `provider_id`'s queue/visits, or a patient's own visits) —
+anyone else in that role gets `403 forbidden`, not just anyone in a different role.
 
 ### Error format
 
@@ -33,9 +59,20 @@ Every non-2xx response uses this envelope:
 }
 ```
 
-`code` is a stable machine-readable string (`not_implemented`, `validation_error`,
-`not_found`, `forbidden`, ...); `message` is human-readable; `details` is
-endpoint-specific and may be `null`.
+`message` is human-readable; `details` is endpoint-specific and may be `null`.
+Stable machine-readable `code` values in use:
+
+| Code | HTTP status | Meaning |
+|---|---|---|
+| `invalid_credentials` | 401 | Login failed — wrong password, unknown username, or a deactivated account. Deliberately identical for all three so the response can't be used to enumerate valid usernames or account state. |
+| `missing_token` | 401 | No `Authorization: Bearer <token>` header on an endpoint that requires one. |
+| `invalid_token` | 401 | Token is malformed, has a bad signature, or its user no longer exists/is inactive. |
+| `token_expired` | 401 | Token's `exp` has passed — re-login. |
+| `forbidden` | 403 | Authenticated, but the role (or object ownership) doesn't permit this action. |
+| `not_found` | 404 | Path references a resource that doesn't exist (e.g. an unknown `visit_id`). |
+| `validation_error` | 422 | Request body/query failed schema validation; `details.errors` has the field-level breakdown. |
+| `not_implemented` | 501 | Passed every auth/role/ownership check; the business logic itself isn't built yet. |
+| `http_error` | varies | Fallback for any other `HTTPException` not using a specific code above. |
 
 ### Pagination
 
@@ -70,6 +107,7 @@ The shape returned by the per-provider queue endpoint and pushed over SSE:
       "token_no": "GM-A013",
       "patient_name": "Ravi Kumar",
       "status": "checked_in",
+      "source": "appointment",
       "position": 1,
       "estimated_start": "2026-09-26T05:10:00Z",
       "estimated_wait_min": 12,
@@ -112,7 +150,7 @@ Example `SlotOut`:
 
 | Method | Path | Role | Notes |
 |---|---|---|---|
-| POST | `/api/appointments` | Patient, Receptionist | Body: `AppointmentCreate` → `VisitOut` (201) |
+| POST | `/api/appointments` | Patient, Receptionist | Body: `AppointmentCreate` → `VisitOut` (201). Admin is deliberately excluded — booking is a patient/front-desk action. |
 | GET | `/api/appointments` | Patient (own), Receptionist, Admin | Paginated `VisitOut` |
 | POST | `/api/appointments/{visit_id}/cancel` | Patient (own), Receptionist | → `VisitOut` |
 | POST | `/api/visits/{visit_id}/check-in` | Receptionist | → `VisitOut` |
@@ -201,7 +239,7 @@ Example `MetricsOut`:
 
 | Method | Path | Role | Notes |
 |---|---|---|---|
-| GET | `/api/stream` | Receptionist, Provider, Admin, Patient (status page) | Server-Sent Events. Each event's `data` is a JSON `QueueSnapshotOut`; `event:` field is the provider id the snapshot belongs to, so a client can subscribe to one provider or all of them. |
+| GET | `/api/stream` | Public, no login (same as `/api/status/{token_no}`) | Server-Sent Events. Each event's `data` is a JSON `QueueSnapshotOut`; `event:` field is the provider id the snapshot belongs to, so a client can subscribe to one provider or all of them. Ungated so the public status page can receive live updates without a login; staff dashboards also use it while authenticated for their own reasons (role-scoped filtering, if any, is a Module M7 concern once the stream has real content to filter). |
 
 ## Simulation (dev/demo only)
 
@@ -209,6 +247,8 @@ Example `MetricsOut`:
 |---|---|---|---|
 | GET | `/api/sim/clock` | Admin | → `SimClockOut`: `{"effective_time", "offset_minutes", "is_frozen"}` |
 | POST | `/api/sim/advance` | Admin | Body: `{"minutes": 20}` → `SimClockOut` |
+| POST | `/api/sim/freeze` | Admin | Stops wall time from advancing the clock further (wraps `core.clock.freeze`) → `SimClockOut` |
+| POST | `/api/sim/resume` | Admin | Resumes wall time (wraps `core.clock.unfreeze`) → `SimClockOut` |
 | POST | `/api/sim/reset` | Admin | → `SimClockOut` |
 | POST | `/api/sim/seed` | Admin | Re-runs the seed script (202 Accepted, async) |
 

@@ -8,3 +8,8 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's dependency-injection idiom is `param: T = Depends(...)`, which B008
+# would otherwise flag as a mutable/expensive default on every route function.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.params.Depends"]

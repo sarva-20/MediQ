@@ -32,6 +32,8 @@ DOCUMENTED_ENDPOINTS = [
     ("get", "/api/stream"),
     ("get", "/api/sim/clock"),
     ("post", "/api/sim/advance"),
+    ("post", "/api/sim/freeze"),
+    ("post", "/api/sim/resume"),
     ("post", "/api/sim/reset"),
     ("post", "/api/sim/seed"),
     ("get", "/api/admin/settings"),

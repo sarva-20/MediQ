@@ -135,7 +135,9 @@ make lint   # runs ruff
 
 Health check: `GET http://localhost:8000/api/health` → `{"status": "ok"}`.
 
-Interactive API docs (once more endpoints are added): `http://localhost:8000/docs`.
+Interactive API docs (Swagger UI): `http://localhost:8000/docs`.
+
+**Developer console:** `http://localhost:8000/console` — a browser-based tool for exercising and demoing every backend module (login, simulated clock, catalog, live queue board, booking/lifecycle actions, metrics, and scripted demo scenarios) without touching the terminal. See [Simulation and Test Console](docs/architecture.md#7-simulation-and-test-console-development-tool) in the architecture doc.
 
 ## 8. Demo Credentials
 

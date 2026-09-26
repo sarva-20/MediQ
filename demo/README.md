@@ -13,7 +13,7 @@ make run                           # starts the backend at http://localhost:8000
 cd backend && ../backend/.venv/bin/python -m app.seed   # first time only, seeds demo data
 ```
 
-API docs / Swagger UI: `http://localhost:8000/docs`.
+API docs / Swagger UI: `http://localhost:8000/docs`. Developer console (recommended for the live demo): `http://localhost:8000/console`.
 
 ## Demo Credentials
 
@@ -26,7 +26,7 @@ Hackathon-only, seeded by `python -m app.seed` — **never real credentials**. A
 | `patient` | Patient (demo) | `MediQ@2026` |
 | `gm_doc_1`, `gm_doc_2`, `oph_doc_1`, `ped_doc_1`, `rad_xray_1`, `rad_us_1`, `rad_ct_1` | Provider (one per seeded provider) | `MediQ@2026` |
 
-Login is not implemented yet (planned for Module M2); these accounts exist in the seeded database now so the frontend and auth work can build against real rows.
+Log in at `POST /api/auth/login` (or via the console's Session panel), which returns a bearer JWT — see `docs/api-contract.md` § Authentication.
 
 ## Demo Flow
 
