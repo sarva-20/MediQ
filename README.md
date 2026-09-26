@@ -151,11 +151,11 @@ Backend: `pytest` (via `make test`) covering the API contract and, as they are i
 
 | Test / Validation | Result |
 |---|---|
-| Core feature test | TODO — update as features land |
-| Error handling | TODO |
-| Input validation | TODO |
-| Responsive UI | TODO (pending frontend) |
-| Security / privacy checks | TODO |
+| Core feature test | Passed — 104 backend tests cover catalog, booking, walk-ins, queue estimation, lifecycle transitions, metrics, RBAC, security, and end-to-end integration. |
+| Error handling | Implemented — API errors use a consistent `error` envelope with stable codes, messages, and details. |
+| Input validation | Implemented — FastAPI and Pydantic/SQLModel schemas validate request bodies, query parameters, and model constraints. |
+| Responsive UI | Passed production build — `npm run build` succeeds for the Vite/React patient, receptionist, provider, and admin views. |
+| Security / privacy checks | Partially implemented — JWT authentication, password hashing, RBAC, ownership checks, and security tests are present; demo accounts/data remain synthetic and production deployment still requires secret and database hardening. |
 
 ## 10. Screenshots
 
